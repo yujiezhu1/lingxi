@@ -4,7 +4,8 @@ import type { DatabaseSync } from "node:sqlite";
 import { openDb } from "./db.js";
 import { isoLocal, newId, nowMs } from "./ids.js";
 import { dbPath, lingxiHome, vaultDir } from "./paths.js";
-import type { Card, CardKind, Handoff, LinkType, SearchHit, Topic, TopicLink } from "./types.js";
+import { matchProject, normalizeProjectPath, type ProjectMatch } from "./project.js";
+import type { Card, CardKind, Handoff, LinkType, SearchHit, TimelineEvent, Topic, TopicLink } from "./types.js";
 
 type Row = Record<string, unknown>;
 
@@ -36,10 +37,25 @@ export interface RememberInput {
 
 export interface TopicOverview {
   topic: Topic;
+  projects: string[];
   links: TopicLink[];
   latestHandoff: Handoff | null;
   otherHandoffs: Handoff[];
   cards: Card[];
+}
+
+export type TopicSummary = Topic & { handoffs: number; cards: number; projects: string[]; match?: ProjectMatch };
+
+export interface TimelineOptions {
+  topic?: string;
+  /** All topics bound to this project path (exact / ancestor / descendant match). */
+  project?: string;
+  since?: number;
+  until?: number;
+  limit?: number;
+  order?: "asc" | "desc";
+  /** Include superseded handoffs and archived cards (default true: it's a history). */
+  includeInactive?: boolean;
 }
 
 export class LingxiStore {
@@ -71,7 +87,7 @@ export class LingxiStore {
 
   // ───────────────────────────── topics ─────────────────────────────
 
-  createTopic(name: string, description?: string | null): Topic {
+  createTopic(name: string, description?: string | null, project?: string | null): Topic {
     const clean = name.trim();
     if (!clean) throw new LingxiError("Topic name must not be empty");
     if (this.findTopic(clean)) throw new LingxiError(`Topic already exists: ${clean}`);
@@ -87,6 +103,7 @@ export class LingxiStore {
     this.db
       .prepare("INSERT INTO topics (id,name,description,status,created_at,updated_at) VALUES (?,?,?,?,?,?)")
       .run(t.id, t.name, t.description, t.status, t.created_at, t.updated_at);
+    if (project?.trim()) this.linkTopic(t.id, "project", project);
     return t;
   }
 
@@ -110,7 +127,7 @@ export class LingxiStore {
     return this.findTopic(idOrName) ?? this.createTopic(idOrName);
   }
 
-  listTopics(opts: { status?: "active" | "archived" | "all" } = {}): (Topic & { handoffs: number; cards: number })[] {
+  listTopics(opts: { status?: "active" | "archived" | "all"; project?: string } = {}): TopicSummary[] {
     const status = opts.status ?? "active";
     const where = status === "all" ? "" : "WHERE t.status = ?";
     const sql = `
@@ -119,8 +136,34 @@ export class LingxiStore {
         (SELECT COUNT(*) FROM cards c WHERE c.topic_id = t.id AND c.status = 'active') AS cards
       FROM topics t ${where} ORDER BY t.updated_at DESC`;
     const stmt = this.db.prepare(sql);
-    const rows = (status === "all" ? stmt.all() : stmt.all(status)) as Row[];
-    return rows as unknown as (Topic & { handoffs: number; cards: number })[];
+    const rows = (status === "all" ? stmt.all() : stmt.all(status)) as unknown as TopicSummary[];
+    const projects = this.allProjectLinks();
+    const list = rows.map((t) => ({ ...t, projects: projects.get(t.id) ?? [] }));
+    if (!opts.project?.trim()) return list;
+    const rank: Record<ProjectMatch, number> = { exact: 0, ancestor: 1, descendant: 2 };
+    return list
+      .map((t) => {
+        const matches = t.projects.map((p) => matchProject(p, opts.project!)).filter((m): m is ProjectMatch => m !== null);
+        const best = matches.sort((a, b) => rank[a] - rank[b])[0];
+        return best ? { ...t, match: best } : null;
+      })
+      .filter((t): t is TopicSummary & { match: ProjectMatch } => t !== null)
+      .sort((a, b) => rank[a.match] - rank[b.match] || b.updated_at - a.updated_at);
+  }
+
+  /** topic_id → bound project paths */
+  private allProjectLinks(): Map<string, string[]> {
+    const rows = this.db
+      .prepare("SELECT topic_id, target_id FROM topic_links WHERE target_type = 'project' ORDER BY created_at")
+      .all() as { topic_id: string; target_id: string }[];
+    const map = new Map<string, string[]>();
+    for (const r of rows) map.set(r.topic_id, [...(map.get(r.topic_id) ?? []), r.target_id]);
+    return map;
+  }
+
+  topicProjects(idOrName: string): string[] {
+    const t = this.getTopic(idOrName);
+    return this.allProjectLinks().get(t.id) ?? [];
   }
 
   setTopicStatus(idOrName: string, status: "active" | "archived"): Topic {
@@ -136,12 +179,14 @@ export class LingxiStore {
   linkTopic(topic: string, targetType: LinkType, targetId: string, note?: string | null): TopicLink {
     const t = this.ensureTopic(topic);
     const now = nowMs();
+    const target = targetType === "project" ? normalizeProjectPath(targetId) : targetId.trim();
+    if (!target) throw new LingxiError("Link target must not be empty");
     this.db
       .prepare(
         `INSERT INTO topic_links (topic_id,target_type,target_id,note,created_at) VALUES (?,?,?,?,?)
          ON CONFLICT(topic_id,target_type,target_id) DO UPDATE SET note = COALESCE(excluded.note, topic_links.note)`,
       )
-      .run(t.id, targetType, targetId.trim(), note?.trim() || null, now);
+      .run(t.id, targetType, target, note?.trim() || null, now);
     // Linking an existing handoff / card also moves it into the topic if it had none.
     if (targetType === "handoff") {
       this.db.prepare("UPDATE handoffs SET topic_id = ? WHERE id = ? AND topic_id IS NULL").run(t.id, targetId);
@@ -153,7 +198,22 @@ export class LingxiStore {
     this.touchTopic(t.id);
     return this.db
       .prepare("SELECT * FROM topic_links WHERE topic_id = ? AND target_type = ? AND target_id = ?")
-      .get(t.id, targetType, targetId.trim()) as unknown as TopicLink;
+      .get(t.id, targetType, target) as unknown as TopicLink;
+  }
+
+  /** Remove a link. For projects the path is normalized and compared case-insensitively on Windows/macOS. */
+  unlinkTopic(topic: string, targetType: LinkType, targetId: string): boolean {
+    const t = this.getTopic(topic);
+    const links = this.db
+      .prepare("SELECT id, target_id FROM topic_links WHERE topic_id = ? AND target_type = ?")
+      .all(t.id, targetType) as { id: number; target_id: string }[];
+    const victim = links.find((l) =>
+      targetType === "project" ? matchProject(l.target_id, targetId) === "exact" : l.target_id === targetId.trim(),
+    );
+    if (!victim) return false;
+    this.db.prepare("DELETE FROM topic_links WHERE id = ?").run(victim.id);
+    this.touchTopic(t.id);
+    return true;
   }
 
   topicOverview(idOrName: string, opts: { cardLimit?: number; handoffLimit?: number } = {}): TopicOverview {
@@ -165,11 +225,51 @@ export class LingxiStore {
     const cards = this.listCards({ topic: topic.id, limit: opts.cardLimit ?? 50 });
     return {
       topic,
-      links,
+      projects: links.filter((l) => l.target_type === "project").map((l) => l.target_id),
+      links: links.filter((l) => l.target_type !== "project"),
       latestHandoff: handoffs[0] ?? null,
       otherHandoffs: handoffs.slice(1),
       cards,
     };
+  }
+
+  // ───────────────────────────── timeline ─────────────────────────────
+
+  /**
+   * Chronological history of a topic, or of every topic bound to a project:
+   * topic creation, handoffs (incl. superseded), cards (incl. archived) and links.
+   */
+  timeline(opts: TimelineOptions): TimelineEvent[] {
+    let topicIds: string[];
+    if (opts.topic) topicIds = [this.getTopic(opts.topic).id];
+    else if (opts.project) topicIds = this.listTopics({ status: "all", project: opts.project }).map((t) => t.id);
+    else throw new LingxiError("timeline needs a topic or a project");
+    if (!topicIds.length) return [];
+
+    const inactive = opts.includeInactive ?? true;
+    const ph = topicIds.map(() => "?").join(",");
+    const since = opts.since ?? 0;
+    const until = opts.until ?? Number.MAX_SAFE_INTEGER;
+    const sql = `
+      SELECT created_at AS ts, 'topic' AS type, id AS topic_id, id, name AS text, 'created' AS kind,
+             NULL AS author_agent, NULL AS status
+        FROM topics WHERE id IN (${ph})
+      UNION ALL
+      SELECT created_at, 'handoff', topic_id, id, title, NULL, author_agent,
+             CASE WHEN status = 'superseded' THEN 'superseded' ELSE NULL END
+        FROM handoffs WHERE topic_id IN (${ph}) ${inactive ? "" : "AND status = 'active'"}
+      UNION ALL
+      SELECT created_at, 'card', topic_id, id, content, kind, author_agent,
+             CASE WHEN status = 'archived' THEN 'archived' ELSE NULL END
+        FROM cards WHERE topic_id IN (${ph}) ${inactive ? "" : "AND status = 'active'"}
+      UNION ALL
+      SELECT created_at, 'link', topic_id, CAST(id AS TEXT), target_id || COALESCE(' — ' || note, ''), target_type,
+             NULL, NULL
+        FROM topic_links WHERE topic_id IN (${ph})`;
+    const rows = this.db
+      .prepare(`SELECT * FROM (${sql}) WHERE ts >= ? AND ts <= ? ORDER BY ts ${opts.order === "desc" ? "DESC" : "ASC"}, CASE type WHEN 'topic' THEN 0 WHEN 'link' THEN 1 ELSE 2 END ${opts.order === "desc" ? "DESC" : "ASC"} LIMIT ?`)
+      .all(...topicIds, ...topicIds, ...topicIds, ...topicIds, since, until, opts.limit ?? 200) as unknown as TimelineEvent[];
+    return rows.map((r) => ({ ...r, ts: Number(r.ts) }));
   }
 
   // ───────────────────────────── handoffs ─────────────────────────────

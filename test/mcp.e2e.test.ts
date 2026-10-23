@@ -39,7 +39,7 @@ describe("MCP stdio server", () => {
     try {
       const tools = (await doubao.listTools()).tools.map((t) => t.name).sort();
       expect(tools).toEqual(
-        ["forget", "list_handoffs", "load_handoff", "recall", "remember", "save_handoff", "search", "topic_create", "topic_get", "topic_link", "topic_list"].sort(),
+        ["forget", "list_handoffs", "load_handoff", "recall", "remember", "save_handoff", "search", "topic_create", "topic_get", "topic_link", "topic_list", "topic_timeline", "topic_unlink"].sort(),
       );
 
       const saved = text(
@@ -67,6 +67,17 @@ describe("MCP stdio server", () => {
 
       const err = await codex.callTool({ name: "load_handoff", arguments: { id: "ho_nope" } });
       expect((err as { isError?: boolean }).isError).toBe(true);
+
+      // project binding + timeline
+      const proj = join(home, "repo");
+      await codex.callTool({ name: "topic_link", arguments: { topic: "\u5bfc\u51fa\u9700\u6c42", target_type: "project", target_id: proj } });
+      const listed = text(await doubao.callTool({ name: "topic_list", arguments: { project: join(proj, "src") } }));
+      expect(listed).toContain("\u5bfc\u51fa\u9700\u6c42");
+      expect(listed).toContain("bound to a parent folder");
+      const tl = text(await doubao.callTool({ name: "topic_timeline", arguments: { project: proj } }));
+      expect(tl).toMatch(/handoff \{\u5bfc\u51fa\u9700\u6c42\}/);
+      expect(tl).toContain("(by doubao)");
+      expect(tl).toContain("[decision]");
     } finally {
       await doubao.close();
       await codex.close();

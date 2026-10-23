@@ -7,7 +7,7 @@
 不用再复制粘贴、重新解释背景，也不用担心信息在转述中走样。
 
 - 设计文档：[docs/DESIGN.md](docs/DESIGN.md)
-- **当前阶段：P0**（中枢 + MCP stdio + CLI + Skill + 安装器）。会话记录导入、跨会话消息、后台咨询、活动汇总在 P1 及之后（见[路线图](#路线图)）。
+- **当前阶段：P0.5**（中枢 + MCP stdio + CLI + Skill + 安装器 + 项目绑定 + 时间线）。会话记录导入、跨会话消息、后台咨询、活动汇总在 P1 及之后（见[路线图](#路线图)）。
 
 ---
 
@@ -22,6 +22,7 @@
   - [场景一：豆包对接飞书 → CLI 开发](#场景一豆包对接飞书--cli-开发)
   - [场景二：pi 调研 ⇄ Codex 开发](#场景二pi-调研--codex-开发)
   - [场景三：一开始无关，后来才相关](#场景三一开始无关后来才相关)
+  - [场景四：当作项目的背景、历程、进度记录](#场景四当作项目的背景历程进度记录)
   - [写好交接包](#写好交接包)
   - [知识卡片怎么用](#知识卡片怎么用)
   - [使用习惯建议](#使用习惯建议)
@@ -39,7 +40,7 @@
 
 | 概念 | 是什么 | 例子 |
 |---|---|---|
-| **Topic（工作线）** | 一条工作线，把相关的交接包、卡片、会话、文件、链接归到一起，可以跨 agent | `导出需求`、`XX调研` |
+| **Topic（工作线）** | 一条工作线，把相关的交接包、卡片、会话、文件、链接归到一起，可以跨 agent；**可以绑定到项目目录**，当作项目的背景、决策和进度记录 | `导出需求`、`XX调研`、`灵犀开发` |
 | **Handoff（交接包）** | 某个时刻的工作状态快照，写成「零上下文的人也能接手」的样子 | 豆包整理的需求结论；pi 的阶段性调研结论 |
 | **Card（知识卡片）** | 一条独立、长期有效的知识 | `[decision] 导出使用 Playwright 渲染 PDF` |
 
@@ -147,6 +148,9 @@ pi mcp list              # pi：lingxi: connected, 11 tools
 | 记下一个决定 | 「把这个决定记到灵犀」「记一条约束：……」 | `remember` |
 | 查之前的结论 | 「灵犀里关于 Playwright 的结论是什么？」 | `search` / `recall` |
 | 把东西归到工作线 | 「把这个文件 / 这个链接 / 这个会话关联到 XX」 | `topic_link` |
+| 把工作线绑定到当前项目 | 「把 XX 绑定到当前项目」 | `topic_link`（`target_type=project`） |
+| 加载当前项目的背景 | 「加载这个项目在灵犀里的背景」「这个项目之前做到哪了？」 | `topic_list`（带 `project`）→ `topic_get` |
+| 看开发历程、进度 | 「这个项目的开发历程」「XX 最近一周做了什么？」 | `topic_timeline` |
 | 删掉错误的卡片 | 「这条卡片过时了，从灵犀里删掉」 | `forget` |
 
 ### 场景一：豆包对接飞书 → CLI 开发
@@ -194,9 +198,46 @@ pi mcp list              # pi：lingxi: connected, 11 tools
 > 把交接包 ho_20261023_xxxx 关联到「导出需求」。
 > 把 `D:\proj\docs\export-spec.md` 和这个飞书链接关联到「导出需求」。
 
-`topic_link` 支持的类型：`session`（会话，如 `codex:<会话ID>`）· `handoff` · `card` · `path`（文件路径）· `url` · `topic`。
+`topic_link` 支持的类型：`project`（项目目录）· `session`（会话，如 `codex:<会话ID>`）· `handoff` · `card` · `path`（文件路径）· `url` · `topic`。
 
 > ⏳ P1 会自动导入 Claude Code、Codex、pi 的会话记录。到时候不用提前保存，也能搜到以前会话里的原文。
+
+### 场景四：当作项目的背景、历程、进度记录
+
+给项目建一个 topic 并绑定项目目录，它就成了这个项目的「动态记忆」：让 agent 不必每次重新翻代码熟悉背景，也能看到项目是怎么一步步走过来的。
+
+**建立（一次）**
+
+```bash
+cd D:\proj\my-app
+lingxi topic new my-app -d "my-app 的背景、决策与进度" -p     # -p 不带值 = 绑定当前目录
+# 已有的 topic：lingxi topic bind <topic> [路径]
+```
+
+也可以在 agent 里说：「在灵犀建一个 topic 叫 my-app，绑定到当前项目。」
+
+**日常**
+
+| 时机 | 说法 |
+|---|---|
+| 开新会话 | 「加载这个项目在灵犀里的背景」：agent 用当前目录找到绑定的 topic，再读取最新现状 |
+| 有阶段性进展 | 「更新项目现状的交接包，替换掉旧的」 |
+| 做出决定 / 踩坑 | 「把这个决定记到灵犀」「记一条 dead_end：……」 |
+| 回顾 | 「这个项目的开发历程」「最近一周做了什么」，或 `lingxi timeline --since 7d` |
+
+**和 CLAUDE.md / AGENTS.md 的分工**
+
+| | CLAUDE.md / AGENTS.md | 灵犀 topic |
+|---|---|---|
+| 适合放 | 稳定的事实：架构、目录、命令、规范 | 会变化的：现状、决策及原因、踩过的坑、待办、历程 |
+| 加载 | 每次会话自动加载 | 说一句「加载项目背景」 |
+| 历史 | 只有当前版本 | 有时间线，能看到演进过程 |
+| 跨 agent | 各家读取的文件不同 | 所有 agent 共用一份 |
+
+> 💡 记「**为什么**」和「**做到哪了**」，不要记「代码长什么样」：代码才是最准确的，而且变得比笔记快。
+> 目前**不会**自动往 CLAUDE.md / AGENTS.md 写任何内容，也不会自动注入；如需要，可以自己在里面加一句「本项目在灵犀的 topic 是 my-app」。
+
+**匹配规则**：在项目的子目录里也能找到绑定在项目根目录的 topic；在根目录也能看到绑定在子目录（如 monorepo 子包）上的 topic。一个 topic 可以绑定多个项目，一个项目也可以有多个 topic。
 
 ### 写好交接包
 
@@ -246,10 +287,12 @@ agent 保存交接包时会按下面的模板来写（空的部分会省略）�
 
 | 工具 | 主要参数 | 作用 |
 |---|---|---|
-| `topic_list` | `status?`（active / archived / all） | 列出工作线 |
-| `topic_create` | `name`, `description?` | 创建工作线（`save_handoff` / `remember` 遇到不存在的 topic 也会自动创建） |
-| `topic_get` | `topic`, `card_limit?` | 工作线概览：最新交接包全文 + 更早的交接包列表 + 卡片 + 关联项 |
-| `topic_link` | `topic`, `target_type`, `target_id`, `note?` | 把会话、交接包、卡片、文件、URL 关联到工作线 |
+| `topic_list` | `status?`（active / archived / all）, `project?` | 列出工作线；传 `project`（绝对路径）则只列出绑定到该项目的工作线 |
+| `topic_create` | `name`, `description?`, `project?` | 创建工作线（可同时绑定项目目录）（`save_handoff` / `remember` 遇到不存在的 topic 也会自动创建） |
+| `topic_get` | `topic`, `card_limit?` | 工作线概览：绑定的项目 + 最新交接包全文 + 更早的交接包列表 + 卡片 + 关联项 |
+| `topic_link` | `topic`, `target_type`, `target_id`, `note?` | 把项目目录、会话、交接包、卡片、文件、URL 关联到工作线 |
+| `topic_unlink` | `topic`, `target_type`, `target_id` | 移除关联（例如解绑项目） |
+| `topic_timeline` | `topic?` 或 `project?`, `since?`, `until?`, `order?`, `limit?` | 时间线：某个工作线或某个项目下所有工作线的创建、交接包（含已替换的）、卡片（含已归档的）、关联 |
 | `save_handoff` | `title`, `body_md`, `topic?`, `source_session?`, `refs?`, `supersedes?` | 保存交接包（正文由当前 agent 按模板撰写） |
 | `load_handoff` | `id?` 或 `topic?`，都不传则取最新一个 | 加载交接包 |
 | `list_handoffs` | `topic?`, `include_superseded?`, `limit?` | 列出交接包 |
@@ -271,10 +314,12 @@ CLI 和 MCP 读写同一份数据，适合人手动查看、整理，也可以�
 lingxi status
 
 # 工作线
-lingxi topic ls [-a]                                  # -a 包含已归档
-lingxi topic new <名称> [-d 描述]
+lingxi topic ls [-a] [-p [路径]]                       # -a 包含已归档；-p 只看绑定到某项目的（不带值 = 当前目录）
+lingxi topic new <名称> [-d 描述] [-p [路径]]            # -p 同时绑定项目目录
 lingxi topic show <名称或ID>                           # 完整概览
-lingxi topic link <topic> <type> <target> [-n 备注]    # type: session|handoff|card|path|url|topic
+lingxi topic bind <topic> [路径] ;  lingxi topic unbind <topic> [路径]   # 绑定 / 解绑项目（默认当前目录）
+lingxi topic link <topic> <type> <target> [-n 备注]    # type: project|session|handoff|card|path|url|topic
+lingxi topic unlink <topic> <type> <target>
 lingxi topic archive <topic> ;  lingxi topic unarchive <topic>
 
 # 交接包
@@ -291,6 +336,10 @@ lingxi forget <卡片ID>
 # 搜索
 lingxi search <关键词...> [--topic X] [--type handoff|card] [-n 10]
 
+# 时间线（开发历程 / 进度）
+lingxi timeline [topic] [-p [路径]] [--since 7d] [--until 2026-10-31] [--desc] [-n 200]
+                                                       # 不传 topic 时 = 当前目录所属项目的全部工作线
+
 # 接入与卸载
 lingxi install   [claude-code codex pi cursor workbuddy doubao] [--dry-run] [--skill-only] [--mcp-only]
 lingxi uninstall [targets...] [--dry-run]
@@ -300,6 +349,8 @@ lingxi uninstall [targets...] [--dry-run]
 
 ```bash
 lingxi topic ls
+lingxi topic ls -p                                     # 当前项目有哪些工作线
+lingxi timeline --since 7d                             # 当前项目最近一周的历程
 lingxi topic show 导出需求
 lingxi search Playwright
 lingxi remember constraint 接口必须兼容 v1 --topic 导出需求
@@ -372,6 +423,7 @@ lingxi uninstall cursor        # 只移除某一个
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | P0 中枢 | 交接包、工作线、知识卡片、全文检索、MCP stdio、CLI、Skill、安装器 | ✅ |
+| P0.5 项目记忆 | 工作线绑定项目目录、时间线（不自动写入或注入 CLAUDE.md / AGENTS.md） | ✅ |
 | P1 CLI 之间互通 | 导入 Claude Code、Codex、pi 的会话记录并支持跨会话搜索原文；pi 扩展（在线登记、实时消息）；Claude Code 和 Codex 的钩子；后台咨询（复制一份会话在后台回答问题）；活动汇总 `get_activity`（写日报时能看到各 agent 的进行中工作和未提交改动） | 计划中 |
 | P1.5 办公端写入 | 豆包、WorkBuddy 深度接入；对接飞书 `lark-cli` | 部分完成（MCP 已可用） |
 | P2 办公端之间互通 | WorkBuddy、Cursor 会话导入；在线检测；中文检索增强 | 计划中 |

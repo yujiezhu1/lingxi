@@ -12,6 +12,7 @@ available, use the CLI: `lingxi <command>` (run `lingxi --help`).
 ## Concepts
 
 - **Topic** — a work stream (e.g. `飞书同步需求`, `XX调研`). Groups handoffs, cards and linked sessions/files/URLs across agents.
+  A topic can be **bound to project directories**, so it also serves as a project's background, decision log and progress record.
 - **Handoff** — a structured snapshot of work state, written so that someone with zero context can continue.
 - **Card** — one atomic piece of durable knowledge: `decision | fact | finding | constraint | todo | dead_end | note`.
 
@@ -24,7 +25,17 @@ available, use the CLI: `lingxi <command>` (run `lingxi --help`).
 | Milestone reached / about to switch tools / context getting long / user says "保存交接" | `save_handoff` (offer it proactively at these moments) |
 | A decision is made, a key fact or finding is confirmed, an approach failed | propose `remember` (ask the user unless they said to save freely) |
 | Work turns out to be related to another topic | `topic_link` (session / path / url / handoff / card) |
+| User asks for this project's background / "这个项目之前做到哪了" / "加载项目背景" | `topic_list project=<absolute cwd or repo root>` → `topic_get` on the match(es) |
+| Creating a topic for work inside a code project | `topic_create` with `project=<repo root>` (or `topic_link target_type=project` later) |
+| User asks how a topic/project evolved, "开发历程", "进度", "最近做了什么" | `topic_timeline topic=<topic>` or `topic_timeline project=<path>` (use `since`, e.g. `7d`) |
 | Updating a topic whose earlier handoff is now outdated | `save_handoff` with `supersedes=<old id>` |
+
+## Using a topic as project memory
+
+- Keep one handoff titled like "项目现状 / Project status" up to date: when it changes, save a new one with `supersedes=<old id>`.
+- Record **why** and **where we are** (decisions, constraints, dead ends, progress, half-done work), not what the code looks like —
+  the code is the source of truth and changes faster than notes. Verify against the code before relying on details.
+- Decisions → `remember kind=decision`; failed approaches → `dead_end`; cross-session todos → `todo`.
 
 ## Writing a good handoff
 

@@ -9,8 +9,10 @@ import {
   fmtHandoffFull,
   fmtHandoffLine,
   fmtSearchHits,
+  fmtTimeline,
   fmtTopicLine,
   fmtTopicOverview,
+  parseTimeBound,
 } from "../core/index.js";
 import { VERSION } from "../version.js";
 
@@ -32,6 +34,8 @@ Use it to:
 - Hand work over: save_handoff when a milestone is reached, before switching tools, or when the user asks ("保存交接", "存到灵犀").
 - Keep durable knowledge: remember (decision / fact / finding / constraint / todo / dead_end / note), recall to look it up.
 - Find things: search across all handoffs and cards.
+- Projects: topics can be bound to project directories. topic_list project=<cwd> finds the topics of the current project;
+  topic_timeline shows a topic's or project's history (development log / progress).
 
 Rules: write handoffs yourself from your own context using the template in save_handoff; cite sources with refs; prefer updating
 an existing topic over creating near-duplicates (call topic_list first); never store secrets (API keys, tokens, passwords).`;
@@ -81,13 +85,22 @@ export function createServer(store: LingxiStore): McpServer {
     "topic_list",
     {
       title: "List topics",
-      description: "List topics (work streams that group handoffs and cards across agents). Call before creating a topic to avoid duplicates.",
-      inputSchema: { status: z.enum(["active", "archived", "all"]).optional().describe("Default: active") },
+      description:
+        "List topics (work streams that group handoffs and cards across agents). Call before creating a topic to avoid duplicates. " +
+        "Pass project=<absolute path of the current working directory / repo root> to list only the topics bound to that project " +
+        "(also matches topics bound to a parent folder or to a sub-folder).",
+      inputSchema: {
+        status: z.enum(["active", "archived", "all"]).optional().describe("Default: active"),
+        project: z.string().optional().describe("Absolute project path, e.g. your current working directory"),
+      },
       annotations: RO,
     },
-    guard(({ status }) => {
-      const list = store.listTopics({ status });
-      return list.length ? list.map(fmtTopicLine).join("\n") : "No topics yet. save_handoff / remember with a topic name creates one.";
+    guard(({ status, project }) => {
+      const list = store.listTopics({ status, project });
+      if (list.length) return list.map(fmtTopicLine).join("\n");
+      return project
+        ? `No topic is bound to ${project}. Bind one with topic_link target_type=project, or topic_create with project.`
+        : "No topics yet. save_handoff / remember with a topic name creates one.";
     }),
   );
 
@@ -95,13 +108,20 @@ export function createServer(store: LingxiStore): McpServer {
     "topic_create",
     {
       title: "Create topic",
-      description: "Create a topic (work stream). Optional: save_handoff and remember auto-create missing topics.",
-      inputSchema: { name: z.string().min(1), description: z.string().optional() },
+      description:
+        "Create a topic (work stream). Optionally bind it to a project directory (absolute path). " +
+        "save_handoff and remember also auto-create missing topics.",
+      inputSchema: {
+        name: z.string().min(1),
+        description: z.string().optional(),
+        project: z.string().optional().describe("Absolute path of the project this topic belongs to"),
+      },
       annotations: WR,
     },
-    guard(({ name, description }) => {
-      const t = store.createTopic(name, description);
-      return `Created topic ${t.name} (${t.id}).`;
+    guard(({ name, description, project }) => {
+      const t = store.createTopic(name, description, project);
+      const p = store.topicProjects(t.id);
+      return `Created topic ${t.name} (${t.id})${p.length ? `, bound to project ${p.join(", ")}` : ""}.`;
     }),
   );
 
@@ -110,7 +130,7 @@ export function createServer(store: LingxiStore): McpServer {
     {
       title: "Get topic overview",
       description:
-        "Load everything about a topic: latest handoff (full), earlier handoffs, knowledge cards and linked items. " +
+        "Load everything about a topic: bound project, latest handoff (full), earlier handoffs, knowledge cards and linked items. " +
         "Best first call when resuming work on a topic in a new session or another agent.",
       inputSchema: {
         topic: z.string().min(1).describe("Topic name or id"),
@@ -126,8 +146,9 @@ export function createServer(store: LingxiStore): McpServer {
     {
       title: "Link item to topic",
       description:
-        "Attach an item to a topic (topic is created if missing). Use to relate work that only later turned out to be connected, " +
-        "e.g. target_type=session target_id='codex:<sessionId>', or a file path / URL / existing handoff or card id.",
+        "Attach an item to a topic (topic is created if missing). target_type=project binds the topic to a project directory " +
+        "(absolute path; a topic may belong to several projects and a project may have several topics). Other types relate work " +
+        "that only later turned out to be connected: session ('codex:<sessionId>'), path, url, handoff id, card id, topic.",
       inputSchema: {
         topic: z.string().min(1),
         target_type: z.enum(LINK_TYPES),
@@ -139,6 +160,56 @@ export function createServer(store: LingxiStore): McpServer {
     guard(({ topic, target_type, target_id, note }) => {
       const l = store.linkTopic(topic, target_type, target_id, note);
       return `Linked ${l.target_type} ${l.target_id} to topic ${store.topicName(l.topic_id)}.`;
+    }),
+  );
+
+  server.registerTool(
+    "topic_unlink",
+    {
+      title: "Unlink item from topic",
+      description: "Remove a link from a topic, e.g. unbind a project (target_type=project) or drop a wrong session/path/url link.",
+      inputSchema: {
+        topic: z.string().min(1),
+        target_type: z.enum(LINK_TYPES),
+        target_id: z.string().min(1),
+      },
+      annotations: { ...WR, destructiveHint: true },
+    },
+    guard(({ topic, target_type, target_id }) =>
+      store.unlinkTopic(topic, target_type, target_id)
+        ? `Unlinked ${target_type} ${target_id} from topic ${topic}.`
+        : `No ${target_type} link ${target_id} on topic ${topic}.`,
+    ),
+  );
+
+  server.registerTool(
+    "topic_timeline",
+    {
+      title: "Topic / project timeline",
+      description:
+        "Chronological history (development log / progress record) of a topic, or of all topics bound to a project: " +
+        "topic creation, handoffs (incl. superseded), knowledge cards (incl. archived) and links. " +
+        "Use when the user asks how a project/topic evolved, what was done when, or for progress reports.",
+      inputSchema: {
+        topic: z.string().optional().describe("Topic name or id"),
+        project: z.string().optional().describe("Absolute project path (all topics bound to it); used when topic is omitted"),
+        since: z.string().optional().describe("e.g. 7d, 24h, 2026-10-01"),
+        until: z.string().optional().describe("e.g. 2026-10-23"),
+        order: z.enum(["asc", "desc"]).optional().describe("Default asc (oldest first)"),
+        limit: z.number().int().min(1).max(1000).optional().describe("Default 200"),
+      },
+      annotations: RO,
+    },
+    guard(({ topic, project, since, until, order, limit }) => {
+      const events = store.timeline({
+        topic,
+        project,
+        since: parseTimeBound(since),
+        until: parseTimeBound(until, { endOfDay: true }),
+        order,
+        limit,
+      });
+      return fmtTimeline(events, store, { showTopic: !topic });
     }),
   );
 

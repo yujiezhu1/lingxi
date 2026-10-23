@@ -12,8 +12,11 @@ import {
   fmtHandoffFull,
   fmtHandoffLine,
   fmtSearchHits,
+  fmtTimeline,
   fmtTopicLine,
   fmtTopicOverview,
+  normalizeProjectPath,
+  parseTimeBound,
   type CardKind,
   type LinkType,
 } from "../core/index.js";
@@ -70,37 +73,70 @@ program
 
 // ── topic ──
 const topic = program.command("topic").description("Manage topics (work streams)");
+const projectArg = (v: string | boolean | undefined): string | undefined =>
+  v === undefined || v === false ? undefined : v === true ? process.cwd() : v;
+const checkType = (type: string): LinkType => {
+  if (!(LINK_TYPES as readonly string[]).includes(type)) throw new LingxiError(`Invalid type: ${type} (${LINK_TYPES.join(" | ")})`);
+  return type as LinkType;
+};
+
 topic
   .command("ls")
   .option("-a, --all", "include archived")
-  .action((o: { all?: boolean }) =>
+  .option("-p, --project [path]", "only topics bound to this project (default: current directory)")
+  .action((o: { all?: boolean; project?: string | boolean }) =>
     withStore((s) => {
-      const list = s.listTopics({ status: o.all ? "all" : "active" });
-      console.log(list.length ? list.map(fmtTopicLine).join("\n") : "No topics.");
+      const project = projectArg(o.project);
+      const list = s.listTopics({ status: o.all ? "all" : "active", project });
+      console.log(list.length ? list.map(fmtTopicLine).join("\n") : project ? `No topic bound to ${project}.` : "No topics.");
     }),
   );
 topic
   .command("new <name>")
   .option("-d, --description <text>")
-  .action((name: string, o: { description?: string }) =>
+  .option("-p, --project [path]", "bind to a project directory (default: current directory)")
+  .action((name: string, o: { description?: string; project?: string | boolean }) =>
     withStore((s) => {
-      const t = s.createTopic(name, o.description);
-      console.log(`Created topic ${t.name} (${t.id})`);
+      const t = s.createTopic(name, o.description, projectArg(o.project));
+      const p = s.topicProjects(t.id);
+      console.log(`Created topic ${t.name} (${t.id})${p.length ? `, project: ${p.join(" | ")}` : ""}`);
     }),
   );
 topic
   .command("show <topic>")
   .action((name: string) => withStore((s) => console.log(fmtTopicOverview(s.topicOverview(name), s, { maxBodyChars: Infinity }))));
 topic
+  .command("bind <topic> [path]")
+  .description("Bind a topic to a project directory (default: current directory)")
+  .action((name: string, path: string | undefined) =>
+    withStore((s) => {
+      const l = s.linkTopic(name, "project", path ?? process.cwd());
+      console.log(`Bound ${s.topicName(l.topic_id)} → ${l.target_id}`);
+    }),
+  );
+topic
+  .command("unbind <topic> [path]")
+  .description("Remove a project binding (default: current directory)")
+  .action((name: string, path: string | undefined) =>
+    withStore((s) => {
+      const p = path ?? process.cwd();
+      console.log(s.unlinkTopic(name, "project", p) ? `Unbound ${name} from ${p}` : `${name} is not bound to ${p}`);
+    }),
+  );
+topic
   .command("link <topic> <type> <target>")
   .description(`type: ${LINK_TYPES.join(" | ")}`)
   .option("-n, --note <text>")
   .action((name: string, type: string, target: string, o: { note?: string }) =>
     withStore((s) => {
-      if (!(LINK_TYPES as readonly string[]).includes(type)) throw new LingxiError(`Invalid type: ${type}`);
-      s.linkTopic(name, type as LinkType, target, o.note);
-      console.log(`Linked ${type} ${target} → ${name}`);
+      const l = s.linkTopic(name, checkType(type), target, o.note);
+      console.log(`Linked ${type} ${l.target_id} → ${s.topicName(l.topic_id)}`);
     }),
+  );
+topic
+  .command("unlink <topic> <type> <target>")
+  .action((name: string, type: string, target: string) =>
+    withStore((s) => console.log(s.unlinkTopic(name, checkType(type), target) ? `Unlinked ${type} ${target}` : "No such link.")),
   );
 topic
   .command("archive <topic>")
@@ -108,6 +144,31 @@ topic
 topic
   .command("unarchive <topic>")
   .action((name: string) => withStore((s) => console.log(`Reactivated ${s.setTopicStatus(name, "active").name}`)));
+
+// ── timeline ──
+program
+  .command("timeline [topic]")
+  .description("History of a topic, or of all topics bound to a project (development log / progress)")
+  .option("-p, --project [path]", "all topics bound to this project (default: current directory)")
+  .option("--since <time>", "e.g. 7d, 24h, 2026-10-01")
+  .option("--until <time>", "e.g. 2026-10-23")
+  .option("--desc", "newest first")
+  .option("-n, --limit <n>", "max events (default 200)", (v) => parseInt(v, 10))
+  .action((name: string | undefined, o: { project?: string | boolean; since?: string; until?: string; desc?: boolean; limit?: number }) =>
+    withStore((s) => {
+      const project = name ? undefined : projectArg(o.project ?? true);
+      const events = s.timeline({
+        topic: name,
+        project,
+        since: parseTimeBound(o.since),
+        until: parseTimeBound(o.until, { endOfDay: true }),
+        order: o.desc ? "desc" : "asc",
+        limit: o.limit,
+      });
+      if (!name && project) console.log(`Timeline of project ${normalizeProjectPath(project)}\n`);
+      console.log(fmtTimeline(events, s, { showTopic: !name }));
+    }),
+  );
 
 // ── handoff ──
 const handoff = program.command("handoff").description("Save / load handoffs");

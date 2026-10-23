@@ -1,7 +1,7 @@
 export const CARD_KINDS = ["decision", "fact", "finding", "constraint", "todo", "dead_end", "note"] as const;
 export type CardKind = (typeof CARD_KINDS)[number];
 
-export const LINK_TYPES = ["session", "handoff", "card", "path", "url", "topic"] as const;
+export const LINK_TYPES = ["project", "session", "handoff", "card", "path", "url", "topic"] as const;
 export type LinkType = (typeof LINK_TYPES)[number];
 
 export interface Topic {
@@ -55,4 +55,20 @@ export interface SearchHit {
   title: string;
   snippet: string;
   created_at: number;
+}
+
+export type TimelineEventType = "topic" | "handoff" | "card" | "link";
+
+export interface TimelineEvent {
+  ts: number;
+  type: TimelineEventType;
+  topic_id: string | null;
+  id: string;
+  /** handoff title / card content / link target / topic name */
+  text: string;
+  /** card kind, link target_type, or 'created' for topics */
+  kind: string | null;
+  author_agent: string | null;
+  /** superseded / archived marker, if any */
+  status: string | null;
 }

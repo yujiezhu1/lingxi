@@ -183,7 +183,8 @@ CREATE VIRTUAL TABLE turns_fts USING fts5(text, content='turns', content_rowid='
 -- Topic
 CREATE TABLE topics (id TEXT PRIMARY KEY, name TEXT UNIQUE, description TEXT, status TEXT, created_at INTEGER);
 CREATE TABLE topic_links (topic_id TEXT, target_type TEXT, target_id TEXT, note TEXT, created_at INTEGER);
-  -- target_type: session | handoff | card | path | url
+  -- target_type: project | session | handoff | card | path | url | topic
+  -- project：项目目录（规范化的绝对路径），按「相同 / 祖先 / 子目录」匹配
 
 -- 交接包与卡片（正文同时落盘为 vault/*.md）
 CREATE TABLE handoffs (id TEXT PRIMARY KEY, topic_id TEXT, session_id TEXT, author_agent TEXT,
@@ -337,7 +338,8 @@ consult(target="pi:01a16790", question="方案 B 的性能结论和测试条件�
 | `search` | query, agent?, project?, topic?, since?, until?, limit? | 全文检索会话、交接包、卡片，返回片段和引用 |
 | `list_sessions` | agent?, project?, since?, active_only? | 列出会话（含摘要） |
 | `read_session` | ref, max_chars? | 按引用读取原文片段 |
-| `topic_list` / `topic_create` / `topic_link` / `topic_get` | … | 管理工作线；`topic_get` 返回概览、最新交接包、卡片 |
+| `topic_list` / `topic_create` / `topic_link` / `topic_unlink` / `topic_get` | … | 管理工作线；`topic_list` / `topic_create` 支持 `project`（项目绑定）；`topic_get` 返回绑定项目、概览、最新交接包、卡片 |
+| `topic_timeline` | topic? 或 project?, since?, until?, order?, limit? | 时间线：工作线或项目下全部工作线的创建、交接包、卡片、关联（开发历程 / 进度记录） |
 | `save_handoff` | topic?, title, body_md, refs? | 保存交接包（正文由调用方的 agent 撰写） |
 | `load_handoff` | topic? 或 id? 或 session? | 加载交接包 |
 | `remember` / `recall` | kind, content, topic?, refs? / query, topic? | 写入或检索知识卡片 |
@@ -459,6 +461,7 @@ lingxi/
 | 阶段 | 内容 | 验收 |
 |---|---|---|
 | **P0 中枢** ✅ 2026-10-23 | core + SQLite + MCP（stdio）+ CLI 骨架 + 交接包、Topic、卡片 + 通用 Skill + `lingxi install` | 任意 agent（包括豆包、WorkBuddy）能 `save_handoff` / `load_handoff`。已验证：Codex 写入 → pi 读取；Claude Code、Codex、pi 的 MCP 连接正常；豆包和 WorkBuddy 待在应用内手动添加连接器 |
+| **P0.5 项目记忆** ✅ 2026-10-23 | 工作线绑定项目目录（多对多，按目录层级匹配）；时间线（MCP `topic_timeline` + `lingxi timeline`）；按用户要求**暂不**自动写入或注入 CLAUDE.md / AGENTS.md | 在项目子目录中能找到绑定的工作线；能按时间查看工作线 / 项目的历程 |
 | **P1 CLI 之间互通** | Claude Code、Codex、pi 适配器（导入 + 检索）+ pi 扩展（登记、实时消息）+ Claude Code 钩子 + `consult`（三家）+ `get_activity` | **场景 2 端到端跑通**；场景 4 可以检索 |
 | **P1.5 办公端只写入** | 豆包、WorkBuddy 的 MCP 和 Skill 接入；`get_activity` 开放给办公端；接入 lark-cli（路线 B） | **场景 1、场景 3 跑通** |
 | **P2 办公端之间互通** | WorkBuddy、Cursor 适配器 + 在线检测 + 中文检索增强（分词、向量） | 办公端之间互相检索和交接 |
