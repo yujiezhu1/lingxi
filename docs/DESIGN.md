@@ -353,6 +353,7 @@ consult(target="pi:01a16790", question="方案 B 的性能结论和测试条件�
 **已实现（P0 / P0.5）**
 
 ```
+lingxi guide [--full]                                               # 使用速查（读取 docs/USAGE.md 中的 guide 标记段）
 lingxi status
 lingxi topic ls [-a] [-p [path]] | new <name> [-d] [-p [path]] | show <topic>
 lingxi topic bind|unbind <topic> [path] | link|unlink <topic> <type> <target> | archive|unarchive <topic>
@@ -456,7 +457,7 @@ P0 先用**单包**（npm 包 `lingxi-hub`，命令 `lingxi` / `lx`），模块�
 
 ```
 lingxi/
-├── docs/DESIGN.md
+├── docs/              # USAGE（使用指南）· REFERENCE（参考）· TROUBLESHOOTING（排错）· DESIGN（设计）
 ├── src/
 │   ├── core/          # 存储（node:sqlite）、迁移、检索、格式化
 │   ├── mcp/           # MCP 服务（P0: stdio；P3: HTTP）

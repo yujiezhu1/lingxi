@@ -48,6 +48,16 @@ function readStdin(): string {
   }
 }
 
+// ── guide ──
+program
+  .command("guide")
+  .description("使用速查 / quick usage guide (--full for the complete guide)")
+  .option("--full", "show the complete usage guide (docs/USAGE.md)")
+  .action(async (o: { full?: boolean }) => {
+    const { renderGuide } = await import("./guide.js");
+    console.log(renderGuide({ full: o.full }));
+  });
+
 // ── mcp ──
 program
   .command("mcp")
