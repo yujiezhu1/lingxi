@@ -25,6 +25,8 @@
 | 绑定到当前项目 | 「把 XX 绑定到当前项目」 |
 | 看开发历程、进度 | 「这个项目的开发历程」「XX 最近一周做了什么？」 |
 | 删掉错误的卡片 | 「这条卡片过时了，从灵犀里删掉」 |
+| 找没保存过的内容 | 「在灵犀里搜一下之前哪个会话聊过 PDF 中文字体」 |
+| 写日报 | 「用灵犀看看我今天做了什么，帮我写日报」 |
 
 话里带上「灵犀」两个字，agent 会更准确地调用它。
 
@@ -34,7 +36,9 @@
 lingxi topic ls [-p]              # 有哪些工作线（-p：只看当前项目的）
 lingxi topic show <topic>         # 某个工作线的完整概览
 lingxi timeline [topic] --since 7d  # 历程（不传 topic = 当前项目）
-lingxi search <关键词>             # 全文搜索
+lingxi search <关键词>             # 搜交接包和卡片
+lingxi search -s <关键词>          # 搜 Claude Code / Codex / pi 的会话原文
+lingxi activity                   # 今天做了什么（含未提交改动）
 lingxi topic archive <topic>      # 做完的收起来
 lingxi recall --kind todo         # 跨会话的待办
 ```
@@ -52,6 +56,8 @@ lingxi recall --kind todo         # 跨会话的待办
 - [场景二：pi 调研 ⇄ Codex 开发](#场景二pi-调研--codex-开发)
 - [场景三：一开始无关，后来才相关](#场景三一开始无关后来才相关)
 - [场景四：当作项目的背景、历程、进度记录](#场景四当作项目的背景历程进度记录)
+- [场景五：找回没保存过的内容](#场景五找回没保存过的内容)
+- [场景六：写日报 / 周报](#场景六写日报--周报)
 - [写好交接包](#写好交接包)
 - [知识卡片怎么用](#知识卡片怎么用)
 - [使用习惯建议](#使用习惯建议)
@@ -81,7 +87,7 @@ lingxi recall --kind todo         # 跨会话的待办
 | 处理飞书相关的事 | 豆包 | 对齐完需求：「把对接结论存到灵犀，topic 叫 XX需求，包括要点、飞书链接、相关人和截止时间」 |
 | 开发 | Codex / Claude Code / Cursor | 开始：「加载 XX」；定下方案：「记到灵犀」；收工或换工具：「保存交接」，记得写上**未提交的改动和做到一半的地方** |
 | 调研 | pi | 告一段落：「保存调研结论到灵犀」；开发那边需要时说「加载 XX调研，结合项目现状给方案」 |
-| 写日报 | 豆包 / WorkBuddy | 「看一下灵犀里今天的时间线，帮我写日报」，或 `lingxi timeline --since 1d` |
+| 写日报 | 豆包 / WorkBuddy | 「用灵犀看看我今天做了什么，帮我写日报」（调用 `get_activity`），或 `lingxi activity` |
 
 什么值得存：
 
@@ -153,7 +159,7 @@ lingxi recall --kind todo         # 还有哪些跨会话的待办
 
 可以关联的类型：`project`（项目目录）· `session`（会话，如 `codex:<会话ID>`）· `handoff` · `card` · `path`（文件路径）· `url` · `topic`。
 
-> ⏳ P1 会自动导入 Claude Code、Codex、pi 的会话记录。到时候不用提前保存，也能搜到以前会话里的原文。
+> 💡 Claude Code、Codex、pi 的会话记录会被自动导入，不用提前保存也能搜到以前会话里的原文，见[场景五](#场景五找回没保存过的内容)。
 
 ---
 
@@ -193,6 +199,48 @@ lingxi topic new my-app -d "my-app 的背景、决策与进度" -p     # -p 不�
 > 目前**不会**自动往 CLAUDE.md / AGENTS.md 写任何内容，也不会自动注入；如需要，可以自己在里面加一句「本项目在灵犀的 topic 是 my-app」。
 
 **匹配规则**：在项目的子目录里也能找到绑定在项目根目录的 topic；在根目录也能看到绑定在子目录（如 monorepo 子包）上的 topic。一个 topic 可以绑定多个项目，一个项目也可以有多个 topic。
+
+---
+
+## 场景五：找回没保存过的内容
+
+Claude Code、Codex、pi 的会话记录会被**自动导入**灵犀（只读、增量，平时只要几十毫秒），所以即使当时没说「保存交接」，事后也能找回来。
+
+> 在灵犀里搜一下，之前哪个会话聊过「PDF 中文字体」？
+> 打开那个会话第 42 条附近看看当时的结论。
+> 上次在 Codex 里做 aifchem 接口对接，聊到哪了？
+
+agent 会依次调用 `search_sessions` → `read_session`（或 `list_sessions`）。终端里：
+
+```bash
+lingxi search -s PDF 中文字体          # 搜会话原文（默认只搜对话，不搜工具输出；--tools 包含）
+lingxi sessions -p                     # 当前项目的会话
+lingxi show codex:da497af449db         # 看某个会话最后 40 条对话
+lingxi show pi:ea1adab3a2a9#42         # 看第 42 条前后（含工具调用）
+```
+
+会话引用的格式是 `<agent>:<id 末段>#<序号>`，例如 `codex:da497af449db#42`；也可以用 id 开头几位。
+
+> 找到有价值的结论后，记得让 agent「把这个记到灵犀」，下次就不用再翻原文了。
+> 豆包、WorkBuddy、Cursor 的会话暂不导入（豆包的记录是加密存储的）。
+
+---
+
+## 场景六：写日报 / 周报
+
+在豆包、WorkBuddy 或任意 agent 里：
+
+> 用灵犀看看我今天做了什么，帮我写日报。
+> 用灵犀汇总一下这周的工作（since=7d），写周报。
+
+`get_activity` 会按项目汇总：
+
+- 各 agent 的会话：问了什么、最后的回复；
+- 灵犀里新增的交接包和卡片；
+- git 提交；
+- **当前未提交的改动**（进行中、还没提交的工作也不会漏）。
+
+终端里：`lingxi activity`、`lingxi activity yesterday`、`lingxi activity --since 7d`、`lingxi activity -p`（只看当前项目）。
 
 ---
 

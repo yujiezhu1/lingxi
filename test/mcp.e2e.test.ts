@@ -16,7 +16,7 @@ async function connect(agent: string, clientName: string): Promise<Client> {
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [CLI, "mcp"],
-    env: { ...(process.env as Record<string, string>), LINGXI_HOME: home, LINGXI_AGENT: agent },
+    env: { ...(process.env as Record<string, string>), LINGXI_HOME: home, LINGXI_AGENT: agent, LINGXI_INGEST: "none" },
   });
   const client = new Client({ name: clientName, version: "0.0.0" });
   await client.connect(transport);
@@ -39,7 +39,7 @@ describe("MCP stdio server", () => {
     try {
       const tools = (await doubao.listTools()).tools.map((t) => t.name).sort();
       expect(tools).toEqual(
-        ["forget", "list_handoffs", "load_handoff", "recall", "remember", "save_handoff", "search", "topic_create", "topic_get", "topic_link", "topic_list", "topic_timeline", "topic_unlink"].sort(),
+        ["forget", "get_activity", "list_handoffs", "list_sessions", "load_handoff", "read_session", "recall", "remember", "save_handoff", "search", "search_sessions", "topic_create", "topic_get", "topic_link", "topic_list", "topic_timeline", "topic_unlink"].sort(),
       );
 
       const saved = text(
@@ -78,6 +78,10 @@ describe("MCP stdio server", () => {
       expect(tl).toMatch(/handoff \{\u5bfc\u51fa\u9700\u6c42\}/);
       expect(tl).toContain("(by doubao)");
       expect(tl).toContain("[decision]");
+
+      // session tools respond even with ingestion disabled
+      expect(text(await codex.callTool({ name: "list_sessions", arguments: {} }))).toContain("No sessions");
+      expect(text(await codex.callTool({ name: "get_activity", arguments: { git: false } }))).toContain("{导出需求}");
     } finally {
       await doubao.close();
       await codex.close();

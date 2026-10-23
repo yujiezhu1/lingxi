@@ -1,5 +1,7 @@
 import { shortDate } from "./ids.js";
 import type { LingxiStore, TopicOverview } from "./store.js";
+import type { ActivityReport } from "./activity.js";
+import { refOfSessionId, shortRef, type SessionHit, type SessionInfo, type TurnRow } from "./sessions.js";
 import type { Card, Handoff, SearchHit, TimelineEvent, Topic } from "./types.js";
 
 /** Plain-text / Markdown renderers shared by the MCP server and the CLI. */
@@ -75,6 +77,11 @@ export function fmtTopicOverview(o: TopicOverview, store: LingxiStore, opts: { m
     out.push("(none yet)");
   }
 
+  if (o.recentSessions.length) {
+    out.push("", "## Recent agent sessions in this project (read with read_session)");
+    out.push(...o.recentSessions.map(fmtSessionLine));
+  }
+
   if (o.links.length) {
     out.push("", "## Linked items");
     out.push(...o.links.map((l) => `- ${l.target_type}: ${l.target_id}${l.note ? ` — ${l.note}` : ""}`));
@@ -126,6 +133,104 @@ export function fmtTimeline(events: TimelineEvent[], store: LingxiStore, opts: {
         body = `linked ${e.kind}: ${e.text}`;
     }
     out.push(`- ${time} ${EVENT_LABEL[e.type]}${topic}  ${body}${who}${st}`);
+  }
+  return out.join("\n");
+}
+
+// ───────────────────────────── sessions & activity ─────────────────────────────
+
+const flat = (s: string | null | undefined, max: number): string => {
+  const t = (s ?? "").replace(/\s+/g, " ").trim();
+  return t.length > max ? t.slice(0, max) + "…" : t;
+};
+
+export function fmtSessionLine(s: SessionInfo): string {
+  const span = s.started_at && s.updated_at ? `${shortDate(s.started_at)} → ${shortDate(s.updated_at).slice(11)}` : "";
+  return `- ${shortRef(s)}  ${flat(s.title, 70) || "(untitled)"}\n  ${span}  ${s.turn_count} turns  ${s.cwd ?? ""}`;
+}
+
+export function fmtSessionHits(hits: SessionHit[]): string {
+  if (!hits.length) return "No matching session messages.";
+  return hits
+    .map((h) => {
+      const ref = `${refOfSessionId(h.session_id)}#${h.seq}`;
+      return `- ${ref}  ${h.ts ? shortDate(h.ts) : ""}  [${h.role}]  ${flat(h.title, 50)}\n  ${h.snippet}`;
+    })
+    .join("\n");
+}
+
+export function fmtSessionTurns(
+  r: { session: SessionInfo; turns: TurnRow[]; range: [number, number]; skippedTools: number },
+  opts: { maxChars?: number; perTurnChars?: number } = {},
+): string {
+  const s = r.session;
+  const head = [
+    `# ${flat(s.title, 100) || "(untitled)"}`,
+    `> ${s.agent}:${s.native_id} | cwd: ${s.cwd ?? "?"} | ${s.turn_count} turns | showing #${r.range[0]}–#${r.range[1]}` +
+      (r.skippedTools ? ` (${r.skippedTools} tool turns hidden; pass tools=true to show)` : ""),
+    "",
+  ];
+  const max = opts.maxChars ?? 20000;
+  const per = opts.perTurnChars ?? 2000;
+  const out: string[] = [];
+  let used = head.join("\n").length;
+  for (const t of r.turns) {
+    let body = t.text.length > per ? t.text.slice(0, per) + ` …[+${t.text.length - per} chars]` : t.text;
+    if (t.role === "tool_call" || t.role === "tool_result") body = flat(body, 400);
+    const line = `#${t.seq} [${t.role}${t.ts ? " " + shortDate(t.ts).slice(5) : ""}] ${body}`;
+    if (used + line.length > max) {
+      out.push(`…(output limit reached; continue with ref ${shortRef(s)}#${t.seq}..${r.range[1]})`);
+      break;
+    }
+    out.push(line);
+    used += line.length + 1;
+  }
+  if (!r.turns.length) out.push("(no turns in this range)");
+  return head.join("\n") + out.join("\n\n");
+}
+
+export function fmtActivity(rep: ActivityReport, opts: { maxSessionsPerProject?: number } = {}): string {
+  const out: string[] = [`# Activity ${shortDate(rep.since)} → ${shortDate(rep.until)}`];
+  if (!rep.projects.length && !rep.otherNotes.length) return out[0] + "\n\nNo activity in this range.";
+  const maxS = opts.maxSessionsPerProject ?? 8;
+  for (const p of rep.projects) {
+    out.push("", `## ${p.root}${p.git?.branch ? `  (branch: ${p.git.branch})` : ""}`);
+    if (p.sessions.length) {
+      out.push("", "### Agent sessions");
+      for (const s of p.sessions.slice(0, maxS)) {
+        const ref = refOfSessionId(s.id);
+        out.push(
+          `- ${ref}  ${shortDate(s.first_ts).slice(5)} → ${shortDate(s.last_ts).slice(11)}  ${flat(s.title, 60) || "(untitled)"}  (${s.user_msgs} user msgs)`,
+        );
+        if (s.first_user) out.push(`  asked: ${flat(s.first_user, 160)}`);
+        if (s.last_assistant) out.push(`  last reply: ${flat(s.last_assistant, 220)}`);
+      }
+      if (p.sessions.length > maxS) out.push(`- …and ${p.sessions.length - maxS} more sessions`);
+    }
+    if (p.notes.length) {
+      out.push("", "### Lingxi notes");
+      for (const n of p.notes) {
+        out.push(`- ${shortDate(n.ts).slice(11)} {${n.topic}} ${n.type === "handoff" ? `handoff: ${flat(n.text, 100)}` : `[${n.kind}] ${flat(n.text, 140)}`}${n.author_agent ? ` (by ${n.author_agent})` : ""}`);
+      }
+    }
+    if (p.git) {
+      if (p.git.commits.length) {
+        out.push("", "### Commits");
+        out.push(...p.git.commits.map((c) => `- ${c}`));
+      }
+      if (p.git.status.length || p.git.diffstat) {
+        out.push("", "### Uncommitted changes (current working tree)");
+        if (p.git.diffstat) out.push(p.git.diffstat);
+        out.push(...p.git.status.slice(0, 25).map((l) => `    ${l}`));
+        if (p.git.status.length > 25) out.push(`    …and ${p.git.status.length - 25} more`);
+      }
+    }
+  }
+  if (rep.otherNotes.length) {
+    out.push("", "## Lingxi notes in topics without a bound project");
+    for (const n of rep.otherNotes) {
+      out.push(`- ${shortDate(n.ts).slice(5)} {${n.topic}} ${n.type === "handoff" ? `handoff: ${flat(n.text, 100)}` : `[${n.kind}] ${flat(n.text, 140)}`}${n.author_agent ? ` (by ${n.author_agent})` : ""}`);
+    }
   }
   return out.join("\n");
 }

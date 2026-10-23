@@ -67,6 +67,46 @@ const MIGRATIONS: string[] = [
     tokenize = 'trigram'
   );
   `,
+  // v2 \u2014 P1 (v0.2): imported agent sessions + raw-text index
+  `
+  CREATE TABLE sessions (
+    id            TEXT PRIMARY KEY,          -- '<agent>:<nativeId>'
+    agent         TEXT NOT NULL,
+    native_id     TEXT NOT NULL,
+    title         TEXT,
+    cwd           TEXT,
+    source_path   TEXT NOT NULL UNIQUE,
+    source_offset INTEGER NOT NULL DEFAULT 0, -- bytes already parsed
+    source_size   INTEGER NOT NULL DEFAULT 0,
+    source_mtime  INTEGER NOT NULL DEFAULT 0,
+    started_at    INTEGER,
+    updated_at    INTEGER,
+    turn_count    INTEGER NOT NULL DEFAULT 0,
+    meta          TEXT NOT NULL DEFAULT '{}'
+  );
+  CREATE INDEX idx_sessions_updated ON sessions(updated_at DESC);
+  CREATE INDEX idx_sessions_agent ON sessions(agent, native_id);
+
+  CREATE TABLE turns (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    seq        INTEGER NOT NULL,             -- 1-based position within the session (indexed turns only)
+    role       TEXT NOT NULL,                -- user | assistant | tool_call | tool_result
+    ts         INTEGER,
+    text       TEXT NOT NULL,
+    tool_name  TEXT,
+    UNIQUE (session_id, seq)
+  );
+  CREATE INDEX idx_turns_ts ON turns(ts);
+
+  CREATE VIRTUAL TABLE turns_fts USING fts5(text, content = 'turns', content_rowid = 'id', tokenize = 'trigram');
+  CREATE TRIGGER turns_ai AFTER INSERT ON turns BEGIN
+    INSERT INTO turns_fts(rowid, text) VALUES (new.id, new.text);
+  END;
+  CREATE TRIGGER turns_ad AFTER DELETE ON turns BEGIN
+    INSERT INTO turns_fts(turns_fts, rowid, text) VALUES ('delete', old.id, old.text);
+  END;
+  `,
 ];
 
 export function openDb(file: string): DatabaseSync {

@@ -9,7 +9,9 @@ import type { Card, CardKind, Handoff, LinkType, SearchHit, TimelineEvent, Topic
 
 type Row = Record<string, unknown>;
 
-export class LingxiError extends Error {}
+export { LingxiError } from "./errors.js";
+import { LingxiError } from "./errors.js";
+import { sessionsInProjects, type SessionInfo } from "./sessions.js";
 
 export interface StoreOptions {
   home?: string;
@@ -38,6 +40,8 @@ export interface RememberInput {
 export interface TopicOverview {
   topic: Topic;
   projects: string[];
+  /** Most recent imported agent sessions whose cwd is inside a bound project. */
+  recentSessions: SessionInfo[];
   links: TopicLink[];
   latestHandoff: Handoff | null;
   otherHandoffs: Handoff[];
@@ -216,7 +220,7 @@ export class LingxiStore {
     return true;
   }
 
-  topicOverview(idOrName: string, opts: { cardLimit?: number; handoffLimit?: number } = {}): TopicOverview {
+  topicOverview(idOrName: string, opts: { cardLimit?: number; handoffLimit?: number; sessionLimit?: number } = {}): TopicOverview {
     const topic = this.getTopic(idOrName);
     const links = this.db
       .prepare("SELECT * FROM topic_links WHERE topic_id = ? ORDER BY created_at")
@@ -226,6 +230,11 @@ export class LingxiStore {
     return {
       topic,
       projects: links.filter((l) => l.target_type === "project").map((l) => l.target_id),
+      recentSessions: sessionsInProjects(
+        this.db,
+        links.filter((l) => l.target_type === "project").map((l) => l.target_id),
+        opts.sessionLimit ?? 5,
+      ),
       links: links.filter((l) => l.target_type !== "project"),
       latestHandoff: handoffs[0] ?? null,
       otherHandoffs: handoffs.slice(1),
@@ -449,7 +458,7 @@ export class LingxiStore {
       const match = terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(" AND ");
       const sql = `
         SELECT docs_fts.doc_type, docs_fts.doc_id, docs_fts.topic_id, docs_fts.title,
-               snippet(docs_fts, 4, '«', '»', ' … ', 24) AS snippet, ${created} AS created_at
+               snippet(docs_fts, 4, '«', '»', ' … ', 48) AS snippet, ${created} AS created_at
         FROM docs_fts WHERE docs_fts MATCH ? ${filters.map((x) => "AND " + x).join(" ")}
         ORDER BY bm25(docs_fts) LIMIT ?`;
       rows = this.db.prepare(sql).all(match, ...fargs, limit) as Row[];

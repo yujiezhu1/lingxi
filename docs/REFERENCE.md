@@ -29,6 +29,10 @@ agent 通过这些工具读写灵犀。在 pi 里显示为 `mcp__lingxi__<工具
 | `recall` | `query?`, `topic?`, `kind?`, `limit?` | 查找知识卡片 |
 | `forget` | `id` | 归档一张卡片（不再出现在查找和搜索结果里） |
 | `search` | `query`, `topic?`, `type?`（handoff / card）, `limit?` | 跨所有交接包和卡片全文检索；多个词之间是「且」的关系，中英文都支持 |
+| `list_sessions` | `agent?`, `project?`, `since?`, `until?`, `limit?` | 列出自动导入的 Claude Code / Codex / pi 会话（最新在前） |
+| `search_sessions` | `query`, `agent?`, `project?`, `since?`, `until?`, `include_tools?`, `limit?` | 搜会话原文（默认只搜用户和助手的对话），结果带会话引用 |
+| `read_session` | `ref`, `before?`, `after?`, `from?`, `limit?`, `tools?`, `max_chars?` | 读会话：`codex:<id>`（最后 40 条对话）、`pi:<id>#42`（第 42 条前后，含工具）、`claude-code:<id>#10..30`（区间） |
+| `get_activity` | `date?`（today / yesterday / YYYY-MM-DD）或 `since?` / `until?`, `project?`, `git?` | 活动汇总：按项目列出会话、灵犀笔记、git 提交、当前未提交改动 |
 
 取值说明：
 
@@ -37,6 +41,7 @@ agent 通过这些工具读写灵犀。在 pi 里显示为 `mcp__lingxi__<工具
 | 卡片 `kind` | `decision` · `fact` · `finding` · `constraint` · `todo` · `dead_end` · `note` |
 | 关联 `target_type` | `project`（项目目录）· `session`（如 `codex:<会话ID>`）· `handoff` · `card` · `path` · `url` · `topic` |
 | 时间 `since` / `until` | 相对时间 `30m`、`12h`、`7d`、`2w`；或日期 `2026-10-23`、`2026-10-23 15:30` |
+| 会话引用 `ref` | `<agent>:<id 末段或开头>`，可加 `#序号` 或 `#起..止`，如 `codex:da497af449db#42`、`pi:01a16790` |
 
 写入时会自动记录来源 agent：优先用安装器为每个 agent 设置的 `LINGXI_AGENT`，否则根据 MCP 客户端信息识别。
 
@@ -76,6 +81,15 @@ lingxi forget <卡片ID>
 
 # 搜索
 lingxi search <关键词...> [--topic X] [--type handoff|card] [-n 10]
+lingxi search -s <关键词...> [--agent codex] [-p [路径]] [--since 7d] [--tools] [-n 10]   # 搜会话原文
+
+# 会话（Claude Code / Codex / pi，自动导入）
+lingxi sync [--full] [--agent claude-code codex pi]    # 手动同步（查询前也会自动增量同步）
+lingxi sessions [--agent X] [-p [路径]] [--since 7d] [-n 20]
+lingxi show <ref> [--tools] [--from N] [-n 40] [--context 6]
+
+# 活动汇总（日报 / 周报）
+lingxi activity [today|yesterday|YYYY-MM-DD] [--since 7d] [--until ...] [-p [路径]] [--no-git]
 
 # 时间线（开发历程 / 进度）
 lingxi timeline [topic] [-p [路径]] [--since 7d] [--until 2026-10-31] [--desc] [-n 200]
@@ -127,9 +141,11 @@ lingxi handoff load --topic XX调研 > research.md       # 导出成文件，可
 |---|---|
 | 数据库 | `~/.lingxi/lingxi.db`（SQLite，WAL 模式，多个 agent 同时读写是安全的） |
 | 交接包 Markdown | `~/.lingxi/vault/handoffs/<年-月>/<id>.md` |
+| 导入的会话 | 同一个数据库的 `sessions` / `turns` 表（只读导入，不修改原始会话文件） |
 | 备份 | 复制 `~/.lingxi/` 整个目录即可 |
 
 - **纯本地**：不联网，不调用任何外部模型；所有内容都由你正在用的 agent 自己写入。
+- **会话导入**：只读取 `~/.claude/projects`、`~/.codex/sessions`、`~/.pi/agent/sessions`；不导入模型的思考过程；工具输出截断保存；常见密钥格式（`sk-…`、`Bearer …`、`api_key=…` 等）会被打码。可用 `LINGXI_INGEST` 关闭。
 - **不要往灵犀里存密钥、token、密码**（Skill 也会提醒 agent 不要这样做）。
 
 ---
@@ -140,3 +156,5 @@ lingxi handoff load --topic XX调研 > research.md       # 导出成文件，可
 |---|---|
 | `LINGXI_HOME` | 数据目录，默认 `~/.lingxi`。在执行 `lingxi install` 之前设置，安装器会把它写进各 agent 的配置 |
 | `LINGXI_AGENT` | 写入记录时的来源 agent 名称。安装器会为每个 agent 自动设置；CLI 不设置时记为 `cli` |
+| `LINGXI_INGEST` | 要导入哪些 agent 的会话：逗号分隔（`claude-code,codex,pi`），`none` 关闭；默认全部 |
+| `LINGXI_CLAUDE_DIR` / `LINGXI_CODEX_DIR` / `LINGXI_PI_DIR` | 覆盖会话记录目录（默认 `~/.claude/projects`、`~/.codex`、`~/.pi/agent/sessions`） |

@@ -17,9 +17,19 @@ import {
   fmtTopicOverview,
   normalizeProjectPath,
   parseTimeBound,
+  activityRange,
+  activityReport,
+  fmtActivity,
+  fmtSessionHits,
+  fmtSessionLine,
+  fmtSessionTurns,
+  listSessions,
+  readSession,
+  searchSessions,
   type CardKind,
   type LinkType,
 } from "../core/index.js";
+import { Ingestor } from "../ingest/index.js";
 import { VERSION } from "../version.js";
 
 const program = new Command();
@@ -78,6 +88,8 @@ program
       console.log(`home:     ${st.home}`);
       console.log(`database: ${dbPath(st.home)}`);
       console.log(`topics: ${st.topics}   handoffs: ${st.handoffs}   cards: ${st.cards}`);
+      const ss = s.db.prepare("SELECT agent, COUNT(*) AS n, SUM(turn_count) AS t FROM sessions GROUP BY agent").all() as { agent: string; n: number; t: number }[];
+      console.log(`sessions: ${ss.length ? ss.map((r) => `${r.agent} ${r.n} (${r.t} turns)`).join(", ") : "none imported yet (run lingxi sync)"}`);
     }),
   );
 
@@ -264,11 +276,106 @@ program
 // ── search ──
 program
   .command("search <query...>")
+  .description("Search handoffs and cards; with -s, search imported agent session transcripts")
   .option("--topic <topic>")
   .addOption(new Option("--type <type>").choices(["handoff", "card"]))
+  .option("-s, --sessions", "search Claude Code / Codex / pi session transcripts instead")
+  .option("--agent <agent>", "with -s: claude-code | codex | pi")
+  .option("-p, --project [path]", "with -s: only sessions inside this project (default: current directory)")
+  .option("--since <time>", "with -s: e.g. 7d, 2026-10-01")
+  .option("--tools", "with -s: also search tool calls / outputs")
   .option("-n, --limit <n>", "max items", (v) => parseInt(v, 10))
-  .action((query: string[], o: { topic?: string; type?: "handoff" | "card"; limit?: number }) =>
-    withStore((s) => console.log(fmtSearchHits(s.search(query.join(" "), { topic: o.topic, type: o.type, limit: o.limit }), s))),
+  .action(
+    (
+      query: string[],
+      o: { topic?: string; type?: "handoff" | "card"; sessions?: boolean; agent?: string; project?: string | boolean; since?: string; tools?: boolean; limit?: number },
+    ) =>
+      withStore((s) => {
+        const q = query.join(" ");
+        if (!o.sessions) return console.log(fmtSearchHits(s.search(q, { topic: o.topic, type: o.type, limit: o.limit }), s));
+        syncQuiet(s);
+        console.log(
+          fmtSessionHits(
+            searchSessions(s.db, q, {
+              agent: o.agent,
+              project: projectArg(o.project),
+              since: parseTimeBound(o.since),
+              includeTools: o.tools,
+              limit: o.limit,
+            }),
+          ),
+        );
+      }),
+  );
+
+// ── sessions ──
+function syncQuiet(s: LingxiStore): void {
+  try {
+    new Ingestor(s).sync();
+  } catch (err) {
+    console.error(`lingxi: session sync failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+program
+  .command("sync")
+  .description("Import / update Claude Code, Codex and pi session transcripts (incremental)")
+  .option("--full", "re-import everything from scratch")
+  .option("--agent <agent...>", "only these agents: claude-code codex pi")
+  .action((o: { full?: boolean; agent?: string[] }) =>
+    withStore((s) => {
+      const r = new Ingestor(s).sync({ full: o.full, agents: o.agent });
+      for (const a of r.agents) {
+        console.log(`${a.agent.padEnd(12)} files ${a.files}  changed ${a.changedFiles}  new sessions ${a.newSessions}  new turns ${a.newTurns}`);
+        for (const e of a.errors.slice(0, 5)) console.log(`  ! ${e}`);
+      }
+      console.log(`done in ${r.ms} ms`);
+    }),
+  );
+
+program
+  .command("sessions")
+  .description("List imported agent sessions (newest first)")
+  .option("--agent <agent>", "claude-code | codex | pi")
+  .option("-p, --project [path]", "only sessions inside this project (default: current directory)")
+  .option("--since <time>", "e.g. 7d, 2026-10-01")
+  .option("-n, --limit <n>", "max items (default 20)", (v) => parseInt(v, 10))
+  .action((o: { agent?: string; project?: string | boolean; since?: string; limit?: number }) =>
+    withStore((s) => {
+      syncQuiet(s);
+      const list = listSessions(s.db, { agent: o.agent, project: projectArg(o.project), since: parseTimeBound(o.since), limit: o.limit });
+      console.log(list.length ? list.map(fmtSessionLine).join("\n") : "No sessions.");
+    }),
+  );
+
+program
+  .command("show <ref>")
+  .description("Read a session: codex:01a167c8 | pi:01a16790#42 | claude-code:cb991d64#10..30")
+  .option("--tools", "include tool calls / results")
+  .option("--from <n>", "start turn", (v) => parseInt(v, 10))
+  .option("-n, --limit <n>", "number of turns (default: last 40)", (v) => parseInt(v, 10))
+  .option("--context <n>", "turns before/after a #seq ref (default 6)", (v) => parseInt(v, 10))
+  .action((ref: string, o: { tools?: boolean; from?: number; limit?: number; context?: number }) =>
+    withStore((s) => {
+      syncQuiet(s);
+      const r = readSession(s.db, ref, { tools: o.tools, from: o.from, limit: o.limit, before: o.context, after: o.context });
+      console.log(fmtSessionTurns(r, { maxChars: 200000, perTurnChars: 20000 }));
+    }),
+  );
+
+program
+  .command("activity [date]")
+  .description("Activity report by project: sessions, Lingxi notes, commits, uncommitted changes. date: today | yesterday | YYYY-MM-DD")
+  .option("--since <time>", "period instead of a day, e.g. 7d")
+  .option("--until <time>")
+  .option("-p, --project [path]", "only this project (default: current directory)")
+  .option("--no-git", "skip git commits / status")
+  .action((date: string | undefined, o: { since?: string; until?: string; project?: string | boolean; git?: boolean }) =>
+    withStore((s) => {
+      syncQuiet(s);
+      const range = activityRange(date, o.since, o.until);
+      console.log(fmtActivity(activityReport(s, { ...range, project: projectArg(o.project), git: o.git })));
+    }),
   );
 
 // ── install ──
