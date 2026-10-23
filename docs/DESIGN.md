@@ -350,17 +350,30 @@ consult(target="pi:01a16790", question="方案 B 的性能结论和测试条件�
 
 ### 11.2 CLI 命令
 
+**已实现（P0 / P0.5）**
+
+```
+lingxi status
+lingxi topic ls [-a] [-p [path]] | new <name> [-d] [-p [path]] | show <topic>
+lingxi topic bind|unbind <topic> [path] | link|unlink <topic> <type> <target> | archive|unarchive <topic>
+lingxi handoff save -t <title> [--topic] [-f file | stdin] [--source] [--ref]... [--supersedes] [--agent]
+lingxi handoff load [id] [--topic] | ls [--topic] [-a] [-n]
+lingxi remember <kind> <content...> [--topic] [--ref]... ; lingxi recall [query...] [--topic] [--kind] ; lingxi forget <id>
+lingxi search <query...> [--topic] [--type handoff|card] [-n]
+lingxi timeline [topic] [-p [path]] [--since] [--until] [--desc] [-n]
+lingxi install|uninstall [claude-code|codex|pi|cursor|workbuddy|doubao] [--dry-run] [--skill-only] [--mcp-only]
+lingxi mcp                                                          # stdio MCP 服务（由各 agent 启动）
+```
+
+**规划中（P1+）**
+
 ```
 lingxi daemon [start|stop|status]
-lingxi search "<q>" [--agent codex] [--since 7d]
-lingxi sessions [--active] [--project .]
-lingxi show <ref>
-lingxi topic new|link|show|ls
-lingxi handoff save|load|ls
+lingxi sessions [--active] [--project .] ; lingxi show <ref>       # 会话记录导入后
+lingxi search "<q>" [--agent codex] [--since 7d]                    # 扩展到会话原文
 lingxi send <to> "<msg>" ; lingxi inbox
 lingxi consult <ref> "<question>"
 lingxi activity [today|2026-10-23|week] [--json]
-lingxi install [claude-code|codex|pi|cursor|workbuddy|doubao|all]   # 自动写入 MCP 配置、Skill、钩子
 lingxi export <topic|handoff> --clipboard                           # 兜底：给接不了 MCP 的工具用
 ```
 
