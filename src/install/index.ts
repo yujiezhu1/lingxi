@@ -187,7 +187,7 @@ function removeSkill(dir: string, dry: boolean): void {
 // ── Manual instructions for apps whose MCP config lives in their UI ──
 
 function manualInstructions(target: Target, spec: LaunchSpec): string {
-  const app = target === "doubao" ? "豆包工作 → 自定义连接器 (MCP)" : "WorkBuddy → 连接器 / MCP 设置";
+  const app = "豆包工作 → 自定义连接器 (MCP)";
   const json = JSON.stringify({ mcpServers: { [SERVER_NAME]: { command: spec.command, args: spec.args, env: spec.env } } }, null, 2);
   return [
     `  ⚠ ${target}: the MCP server must be added in the app UI (${app}). Use stdio with:`,
@@ -237,6 +237,10 @@ export async function runInstall(input: string[], opts: InstallOptions): Promise
             upsertJsonServer(join(H, ".cursor", "mcp.json"), { command: spec.command, args: spec.args, env: spec.env }, opts.dryRun);
             break;
           case "workbuddy":
+            // WorkBuddy reads user MCP servers from ~/.workbuddy/mcp.json (UserMcpProvider, same dir as mcp-approvals.json).
+            // It may ask once in the UI to approve the new server.
+            upsertJsonServer(join(H, ".workbuddy", "mcp.json"), { command: spec.command, args: spec.args, env: spec.env }, opts.dryRun);
+            break;
           case "doubao":
             manual.push(manualInstructions(t, spec));
             log(opts.dryRun, "  MCP: manual step required (see summary below)");
@@ -282,6 +286,8 @@ export async function runUninstall(input: string[], opts: { dryRun: boolean }): 
           upsertJsonServer(join(H, ".cursor", "mcp.json"), null, opts.dryRun);
           break;
         case "workbuddy":
+          upsertJsonServer(join(H, ".workbuddy", "mcp.json"), null, opts.dryRun);
+          break;
         case "doubao":
           log(opts.dryRun, "  MCP: remove the 'lingxi' connector in the app UI");
           break;

@@ -380,7 +380,7 @@ lingxi export <topic|handoff> --clipboard                           # 兜底：�
 | 12.2 Codex | `~/.codex/config.toml` 的 `[mcp_servers.lingxi]` | `~/.agents/skills/lingxi` | `~/.codex/hooks.json`：`session_start`（登记）、`user_prompt_submit`（收件箱）、`pre_compact` / `stop`（提示保存交接包） |
 | 12.3 pi | MCP 或直接写成工具 | Skill | **lingxi-pi 扩展**：登记、实时插入消息、`/ctx` 命令、会话结束提示。作为参考实现 |
 | 12.4 Cursor | `~/.cursor/mcp.json` | `~/.cursor/rules` 或 skills | `~/.cursor/hooks.json` |
-| 12.5 WorkBuddy | `~/.workbuddy/connectors/default/mcp.json` | `~/.workbuddy/skills` | — |
+| 12.5 WorkBuddy | `~/.workbuddy/mcp.json`（用户级 MCP，只支持 mcp.json 方式；`connectors/` 下的是连接器市场自动生成的，不要改） | `~/.workbuddy/skills` | — |
 | 12.6 豆包工作 | 自定义连接器选 stdio，命令填 `lingxi mcp`；P3 之后也可以填 HTTP 地址 `http://127.0.0.1:<port>/mcp` | `~/DoubaoWork/skills/lingxi` | — |
 
 ### 12.7 飞书（场景 1 的路线 B）

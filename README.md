@@ -27,7 +27,7 @@ node dist/cli/index.js install             # 写入各 agent 的 MCP 配置 + Sk
 | Codex | `~/.codex/config.toml` → `[mcp_servers.lingxi]` | `~/.agents/skills/lingxi` |
 | pi | `~/.pi/agent/mcp.json`（exposure: direct） | `~/.agents/skills/lingxi` |
 | Cursor | `~/.cursor/mcp.json` | `~/.agents/skills/lingxi` |
-| WorkBuddy | 应用内手动添加（安装器会打印配置） | `~/.workbuddy/skills/lingxi` |
+| WorkBuddy | `~/.workbuddy/mcp.json`（首次使用可能需要在应用内批准） | `~/.workbuddy/skills/lingxi` |
 | 豆包工作 | 自定义连接器 → stdio（安装器会打印配置） | `~/DoubaoWork/skills/lingxi` |
 
 卸载：`lingxi uninstall [targets...]`。数据目录：`~/.lingxi/`（可用 `LINGXI_HOME` 覆盖）。
