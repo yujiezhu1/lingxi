@@ -216,7 +216,7 @@ agent 会依次调用 `search_sessions` → `read_session`（或 `list_sessions`
 lingxi search -s PDF 中文字体          # 搜会话原文（默认只搜对话，不搜工具输出；--tools 包含）
 lingxi sessions -p                     # 当前项目的会话
 lingxi show codex:da497af449db         # 看某个会话最后 40 条对话
-lingxi show pi:ea1adab3a2a9#42         # 看第 42 条前后（含工具调用）
+lingxi show pi:16eb5ec3b871#42         # 看第 42 条前后（含工具调用）
 ```
 
 会话引用的格式是 `<agent>:<id 末段>#<序号>`，例如 `codex:da497af449db#42`；也可以用 id 开头几位。
