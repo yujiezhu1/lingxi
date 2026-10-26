@@ -32,6 +32,7 @@ agent 通过这些工具读写灵犀。在 pi 里显示为 `mcp__lingxi__<工具
 | `list_sessions` | `agent?`, `project?`, `since?`, `until?`, `limit?` | 列出自动导入的会话（Claude Code / Codex / pi / 豆包工作 / WorkBuddy，最新在前） |
 | `search_sessions` | `query`, `agent?`, `project?`, `since?`, `until?`, `include_tools?`, `limit?` | 搜会话原文（默认只搜用户和助手的对话），结果带会话引用 |
 | `read_session` | `ref`, `before?`, `after?`, `from?`, `limit?`, `tools?`, `max_chars?` | 读会话：`codex:<id>`（最后 40 条对话）、`pi:<id>#42`（第 42 条前后，含工具）、`claude-code:<id>#10..30`（区间） |
+| `consult_session` | `ref`, `question`, `confirm?`, `model?`, `timeout_sec?`, `save_to_topic?` | 后台咨询：让历史会话（Claude Code / Codex / pi）的只读副本带着完整上下文回答问题。不带 `confirm` 时只返回大小估算；`confirm=true` 才真正执行（产生模型费用） |
 | `get_activity` | `date?`（today / yesterday / YYYY-MM-DD）或 `since?` / `until?`, `project?`, `git?` | 活动汇总：按项目列出会话、灵犀笔记、git 提交、当前未提交改动 |
 
 取值说明：
@@ -88,6 +89,9 @@ lingxi sync [--full] [--agent claude-code codex pi]    # 手动同步（查询�
 lingxi sessions [--agent X] [-p [路径]] [--since 7d] [-n 20]
 lingxi show <ref> [--tools] [--from N] [-n 40] [--context 6]
 
+# 后台咨询（产生模型费用）
+lingxi consult <ref> <问题...> [--estimate] [-y] [--model M] [--timeout 180] [--save-topic X]
+
 # 活动汇总（日报 / 周报）
 lingxi activity [today|yesterday|YYYY-MM-DD] [--since 7d] [--until ...] [-p [路径]] [--no-git]
 
@@ -116,6 +120,16 @@ lingxi handoff load --topic XX调研 > research.md       # 导出成文件，可
 
 ---
 
+## 后台咨询的实现
+
+| Agent | 实际执行的命令（问题通过标准输入传入） | 只读与不留痕 |
+|---|---|---|
+| pi | `pi -p --session <临时副本> --session-dir <临时目录> --no-tools --no-mcp --no-skills --no-extensions --no-context-files --mode json` | 在会话文件的临时副本上继续，不碰原文件；禁用全部工具；结束后删除临时目录 |
+| Codex | `codex exec fork <id> --ephemeral -c sandbox_mode=read-only -c approval_policy=never --json -o <文件> -` | `--ephemeral` 不保存新会话；只读沙箱 |
+| Claude Code | `claude -p --resume <id> --fork-session --no-session-persistence --tools "" --output-format json`（在会话的工作目录下执行） | 复制会话、不保存、禁用全部工具（**尚未实测**） |
+
+转发给副本的问题会加上一段说明：这是来自另一个会话的只读咨询，只根据已有上下文回答，不要调用工具、不要修改文件。
+
 ## 各 agent 的接入位置
 
 `lingxi install` 写入的位置：
@@ -132,6 +146,7 @@ lingxi handoff load --topic XX调研 > research.md       # 导出成文件，可
 - `~/.agents/skills` 是 Codex、pi、Cursor 共用的 Skill 目录，只装一份。
 - 启动命令是**绝对路径**（当前 `node.exe` 加 `dist/cli/index.js mcp`），不依赖 PATH。项目目录移动后需要重新执行 `npm run build && lingxi install`。
 - 修改配置前会备份为 `<原文件>.lingxi-bak-<时间>`。
+- 为了让后台咨询不被 agent 的工具超时打断，安装器会把超时调长：Codex `tool_timeout_sec = 600`，pi `timeout: 600`（秒），WorkBuddy `timeout: 600000`（毫秒）。
 
 ---
 
@@ -157,6 +172,7 @@ lingxi handoff load --topic XX调研 > research.md       # 导出成文件，可
 |---|---|
 | `LINGXI_HOME` | 数据目录，默认 `~/.lingxi`。在执行 `lingxi install` 之前设置，安装器会把它写进各 agent 的配置 |
 | `LINGXI_AGENT` | 写入记录时的来源 agent 名称。安装器会为每个 agent 自动设置；CLI 不设置时记为 `cli` |
+| `LINGXI_CONSULT_AUTOCONFIRM_TOKENS` | 后台咨询：估算 token 数不超过这个值时，agent 不用再确认就可以直接执行；默认 0（每次都确认） |
 | `LINGXI_INGEST` | 要导入哪些 agent 的会话：逗号分隔（`claude-code,codex,pi,doubao,workbuddy`），`none` 关闭；默认全部 |
 | `LINGXI_DOUBAO_DIR` / `LINGXI_WORKBUDDY_DIR` | 覆盖豆包工作（默认 `%LOCALAPPDATA%/DoubaoWork/User Data/Profile 1/.doubaowork/agent_mode/workspace/.sessions`）和 WorkBuddy（默认 `~/.workbuddy/projects`）的会话目录 |
 | `LINGXI_CLAUDE_DIR` / `LINGXI_CODEX_DIR` / `LINGXI_PI_DIR` | 覆盖会话记录目录（默认 `~/.claude/projects`、`~/.codex`、`~/.pi/agent/sessions`） |

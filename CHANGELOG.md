@@ -1,6 +1,19 @@
 # 更新日志
 
-## 未发布
+## 0.3.0 — 2026-10-26
+
+### 后台咨询（P1-b）
+
+- 新增 MCP 工具 `consult_session` 和命令 `lingxi consult`：让历史 Claude Code / Codex / pi 会话的**只读、不保存的副本**带着完整上下文回答问题，原会话不受影响。
+  - pi：在会话文件的临时副本上继续，禁用全部工具；Codex：`exec fork --ephemeral`，只读沙箱；Claude Code：`--fork-session --no-session-persistence --tools ""`（尚未实测）。
+  - 默认先返回大小估算，需确认后才执行（`confirm=true` / `-y`）；`LINGXI_CONSULT_AUTOCONFIRM_TOKENS` 可设置免确认阈值。
+  - 可选把问答存成 finding 卡片（`save_to_topic` / `--save-topic`）。
+  - 看到回答完成后最多再等 3 秒即结束进程树，避免 CLI 滞留拖慢响应；MCP 调用期间发送进度通知。
+- 安装器为 Codex、pi、WorkBuddy 写入更长的 MCP 工具超时（600 秒）。
+- 共 18 个 MCP 工具；测试 41 个（用假的 pi / codex 可执行文件测试咨询流程，不调用真实模型）。
+
+### 文档与仓库
+
 
 - README 增加痛点案例、「以前 vs 用灵犀」对照表、跨 agent 流程示意和常用命令；新增英文版 README.en.md。
 - 新增演示录制脚本 docs/DEMO.md 和示例数据脚本 scripts/demo-seed.mjs（npm run demo:seed，使用独立目录，不读取真实会话）。

@@ -24,6 +24,7 @@ import {
   searchSessions,
 } from "../core/index.js";
 import { Ingestor } from "../ingest/index.js";
+import { consultSession, estimateConsult, fmtConsult, fmtEstimate } from "../consult/index.js";
 import { VERSION } from "../version.js";
 
 export const HANDOFF_TEMPLATE = `## 目标 / Goal
@@ -46,6 +47,8 @@ Use it to:
 - Find things: search across all handoffs and cards.
 - Past conversations: Claude Code / Codex / pi / Doubao Work (豆包工作) / WorkBuddy sessions are imported automatically. search_sessions finds things that were
   discussed but never saved; read_session opens a transcript; get_activity summarizes a day (sessions, notes, commits, uncommitted changes).
+- Consult: consult_session asks a read-only background copy of a past Claude Code / Codex / pi session (full context; costs
+  tokens — get the estimate first and only run with confirm=true after the user agrees).
 - Projects: topics can be bound to project directories. topic_list project=<cwd> finds the topics of the current project;
   topic_timeline shows a topic's or project's history (development log / progress).
 
@@ -473,6 +476,81 @@ export function createServer(store: LingxiStore, opts: { ingestor?: Ingestor } =
       const range = activityRange(date, since, until);
       return fmtActivity(activityReport(store, { ...range, project, git }));
     }),
+  );
+
+  // ── background consultation (v0.3) ──
+  server.registerTool(
+    "consult_session",
+    {
+      title: "Consult a past session (background, read-only)",
+      description:
+        "Ask a question to a forked, read-only, non-persisted copy of a past Claude Code / Codex / pi session, so it answers with " +
+        "that session's FULL context — without switching tools and without disturbing the original session. " +
+        "Use only when saved handoffs/cards and read_session are not enough (e.g. 'what test conditions was that conclusion based on?'). " +
+        "It COSTS MODEL TOKENS (the copy reloads the whole session) and takes ~10s–3min. " +
+        "First call without confirm to get a size estimate, tell the user, and only call again with confirm=true after the user agrees. " +
+        "Doubao Work / WorkBuddy sessions cannot be consulted (no headless CLI) — use read_session instead.",
+      inputSchema: {
+        ref: z.string().min(1).describe("Session ref, e.g. pi:16eb5ec3b871 or codex:da497af449db"),
+        question: z.string().min(1),
+        confirm: z.boolean().optional().describe("Set true only after the user approved the cost"),
+        model: z.string().optional().describe("Override the model (default: the agent's default)"),
+        timeout_sec: z.number().int().min(10).max(900).optional().describe("Default 180"),
+        save_to_topic: z.string().optional().describe("Also store the Q&A as a 'finding' card in this topic"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    },
+    async ({ ref, question, confirm, model, timeout_sec, save_to_topic }, extra) => {
+      try {
+        sync();
+        const est = estimateConsult(store, ref);
+        if (!est.supported) return ok(fmtEstimate(est));
+        const auto = Number(process.env.LINGXI_CONSULT_AUTOCONFIRM_TOKENS ?? 0);
+        if (!confirm && !(auto > 0 && est.approxTokens <= auto)) {
+          return ok(
+            fmtEstimate(est) +
+              "\n\nNot run yet: consulting reloads this session into a model and costs tokens. " +
+              "Tell the user the estimate and ask for confirmation, then call consult_session again with confirm=true.",
+          );
+        }
+        // Keep clients from timing out while the copy is thinking: progress notifications reset request timeouts
+        // in clients that support them (e.g. pi).
+        const token = extra?._meta?.progressToken;
+        let tick = 0;
+        const heartbeat =
+          token !== undefined
+            ? setInterval(() => {
+                tick += 1;
+                void extra
+                  .sendNotification({
+                    method: "notifications/progress",
+                    params: { progressToken: token, progress: tick, message: `consulting ${est.ref}\u2026 ${tick * 10}s` },
+                  })
+                  .catch(() => {});
+              }, 10_000)
+            : null;
+        let r;
+        try {
+          r = await consultSession(store, ref, question, { model, timeoutMs: (timeout_sec ?? 180) * 1000 });
+        } finally {
+          if (heartbeat) clearInterval(heartbeat);
+        }
+        let text = fmtConsult(r);
+        if (save_to_topic) {
+          const c = store.remember({
+            kind: "finding",
+            topic: save_to_topic,
+            content: `[consulted ${r.ref}] Q: ${question.trim()}\nA: ${r.answer.length > 1500 ? r.answer.slice(0, 1500) + "…" : r.answer}`,
+            refs: [r.ref],
+            author_agent: agent(null),
+          });
+          text += `\nSaved as card ${c.id} in topic "${save_to_topic}".`;
+        }
+        return ok(text);
+      } catch (err) {
+        return fail(err);
+      }
+    },
   );
 
   // ── search ──

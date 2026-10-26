@@ -96,6 +96,8 @@ export function codexBlock(spec: LaunchSpec): string {
     `[mcp_servers.${SERVER_NAME}]`,
     `command = ${tomlLit(spec.command)}`,
     `args = [${spec.args.map(tomlLit).join(", ")}]`,
+    // consult_session can take minutes; Codex's default MCP tool timeout is 60 s.
+    "tool_timeout_sec = 600",
     "",
     `[mcp_servers.${SERVER_NAME}.env]`,
     ...Object.entries(spec.env).map(([k, v]) => `${k} = ${tomlLit(v)}`),
@@ -229,7 +231,7 @@ export async function runInstall(input: string[], opts: InstallOptions): Promise
           case "pi":
             upsertJsonServer(
               join(H, ".pi", "agent", "mcp.json"),
-              { command: spec.command, args: spec.args, env: spec.env, description: SERVER_DESCRIPTION, exposure: "direct" },
+              { command: spec.command, args: spec.args, env: spec.env, description: SERVER_DESCRIPTION, exposure: "direct", timeout: 600 },
               opts.dryRun,
             );
             break;
@@ -239,7 +241,7 @@ export async function runInstall(input: string[], opts: InstallOptions): Promise
           case "workbuddy":
             // WorkBuddy reads user MCP servers from ~/.workbuddy/mcp.json (UserMcpProvider, same dir as mcp-approvals.json).
             // It may ask once in the UI to approve the new server.
-            upsertJsonServer(join(H, ".workbuddy", "mcp.json"), { command: spec.command, args: spec.args, env: spec.env }, opts.dryRun);
+            upsertJsonServer(join(H, ".workbuddy", "mcp.json"), { command: spec.command, args: spec.args, env: spec.env, timeout: 600000 }, opts.dryRun);
             break;
           case "doubao":
             manual.push(manualInstructions(t, spec));

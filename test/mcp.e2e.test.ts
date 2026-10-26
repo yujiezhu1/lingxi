@@ -39,7 +39,7 @@ describe("MCP stdio server", () => {
     try {
       const tools = (await doubao.listTools()).tools.map((t) => t.name).sort();
       expect(tools).toEqual(
-        ["forget", "get_activity", "list_handoffs", "list_sessions", "load_handoff", "read_session", "recall", "remember", "save_handoff", "search", "search_sessions", "topic_create", "topic_get", "topic_link", "topic_list", "topic_timeline", "topic_unlink"].sort(),
+        ["consult_session", "forget", "get_activity", "list_handoffs", "list_sessions", "load_handoff", "read_session", "recall", "remember", "save_handoff", "search", "search_sessions", "topic_create", "topic_get", "topic_link", "topic_list", "topic_timeline", "topic_unlink"].sort(),
       );
 
       const saved = text(

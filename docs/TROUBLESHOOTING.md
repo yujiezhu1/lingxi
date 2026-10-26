@@ -15,7 +15,7 @@
 lingxi status            # 看数据目录和数量
 claude mcp get lingxi    # Claude Code：Status 应为 ✓ Connected
 codex mcp list           # Codex：lingxi 显示 enabled
-pi mcp list              # pi：lingxi: connected, 17 tools
+pi mcp list              # pi：lingxi: connected, 18 tools
 ```
 
 ### agent 里看不到灵犀的工具
@@ -62,6 +62,14 @@ pi mcp list              # pi：lingxi: connected, 17 tools
 - 把这些字符串写进 `~/.lingxi/redact.txt`（每行一个，`re:` 开头表示正则），再执行 `lingxi sync --full`。
 - 注意：原始记录仍然在各 agent 自己的目录里，灵犀打码不影响原文件；必要时修改密码。
 
+### 后台咨询失败或超时
+
+- 确认对应的命令行工具能正常使用（`pi`、`codex`、`claude` 在终端里能直接运行，并且模型服务可用）。
+- 长会话可以把超时调大：`timeout_sec`（MCP）或 `--timeout`（终端）。
+- 如果 agent 那边先超时了，重新执行一次 `lingxi install` 让安装器写入更长的工具超时（Codex、pi、WorkBuddy）。
+- Claude Code 的会话必须在它原来的工作目录下才能恢复；目录被删除或移动后无法咨询。
+- 豆包工作、WorkBuddy 的会话不支持后台咨询，改用 `read_session` 读原文。
+
 ### 不想让某些会话被导入
 
 - 设置 `LINGXI_INGEST`（例如只导入 `codex,pi`），或 `none` 全部关闭；然后 `lingxi sync --full` 清理已导入的数据。
@@ -100,7 +108,7 @@ pi mcp list              # pi：lingxi: connected, 17 tools
 
 - 核心动作确实类似，总结写得好不好仍然取决于写的那个 agent。
 - 区别在于：不用你来回复制粘贴；内容**持久保存**、可以搜索；多个会话往同一个 topic 里**累积**、多个 agent 都能读；有统一模板、来源引用、作者和时间；新版本替换旧版本，历史保留；桌面端也能直接读写。
-- 手动方式做不到的能力：自动导入会话原文并搜索、活动汇总（v0.2 已支持）；向原会话后台提问、跨会话实时消息（后续版本）。
+- 手动方式做不到的能力：自动导入会话原文并搜索、活动汇总（v0.2）、向历史会话后台提问（v0.3）；跨会话实时消息（后续版本）。
 
 ### 和 CLAUDE.md / AGENTS.md 冲突吗？
 

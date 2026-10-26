@@ -378,6 +378,50 @@ program
     }),
   );
 
+// ── consult ──
+program
+  .command("consult <ref> <question...>")
+  .description("Ask a read-only background copy of a Claude Code / Codex / pi session (costs model tokens)")
+  .option("-y, --yes", "skip the confirmation prompt")
+  .option("--estimate", "only show the size estimate, do not run")
+  .option("--model <model>", "override the model")
+  .option("--timeout <sec>", "timeout in seconds (default 180)", (v) => parseInt(v, 10))
+  .option("--save-topic <topic>", "also store the Q&A as a finding card in this topic")
+  .action(async (ref: string, question: string[], o: { yes?: boolean; estimate?: boolean; model?: string; timeout?: number; saveTopic?: string }) => {
+    const { estimateConsult, consultSession, fmtEstimate, fmtConsult } = await import("../consult/index.js");
+    const s = new LingxiStore();
+    try {
+      syncQuiet(s);
+      const est = estimateConsult(s, ref);
+      console.log(fmtEstimate(est));
+      if (!est.supported || o.estimate) return;
+      if (!o.yes) {
+        if (!process.stdin.isTTY) throw new LingxiError("Consulting costs model tokens; re-run with -y to confirm.");
+        const { createInterface } = await import("node:readline/promises");
+        const rl = createInterface({ input: process.stdin, output: process.stdout });
+        const ans = (await rl.question("Run the consultation now? [y/N] ")).trim().toLowerCase();
+        rl.close();
+        if (ans !== "y" && ans !== "yes") return console.log("Cancelled.");
+      }
+      const q = question.join(" ");
+      console.log("Consulting… (this can take up to a few minutes)");
+      const r = await consultSession(s, ref, q, { model: o.model, timeoutMs: (o.timeout ?? 180) * 1000 });
+      console.log("\n" + fmtConsult(r));
+      if (o.saveTopic) {
+        const c = s.remember({
+          kind: "finding",
+          topic: o.saveTopic,
+          content: `[consulted ${r.ref}] Q: ${q}\nA: ${r.answer.length > 1500 ? r.answer.slice(0, 1500) + "…" : r.answer}`,
+          refs: [r.ref],
+          author_agent: cliAgent(),
+        });
+        console.log(`Saved as card ${c.id} in topic "${o.saveTopic}".`);
+      }
+    } finally {
+      s.close();
+    }
+  });
+
 // ── install ──
 program
   .command("install [targets...]")
