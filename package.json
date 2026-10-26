@@ -3,7 +3,7 @@
   "version": "0.2.1",
   "description": "灵犀 Lingxi — local-first context hub that lets different AI agents and sessions share handoffs, topics and knowledge.",
   "type": "module",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "bin": {
     "lingxi": "dist/cli/index.js",
     "lx": "dist/cli/index.js"
