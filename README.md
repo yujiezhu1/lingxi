@@ -25,6 +25,7 @@
 要求 **Node.js ≥ 22.13**（使用 Node 内置的 `node:sqlite`，没有需要编译的依赖）。
 
 ```bash
+git clone https://github.com/yujiezhu1/lingxi.git
 cd lingxi
 npm install
 npm run build
