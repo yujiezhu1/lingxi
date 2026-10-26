@@ -1,5 +1,7 @@
 # 灵犀 Lingxi
 
+**中文** | [English](README.en.md)
+
 > 让不同 agent、不同会话之间「心有灵犀」。
 > Local-first context hub shared by all your AI agents — Claude Code, Codex, pi, Cursor, WorkBuddy, 豆包工作 …
 
@@ -120,18 +122,30 @@ B 能答上来，就说明打通了。验收完用 `lingxi topic archive 灵犀�
 
 忘了怎么用时，在终端输入 **`lingxi guide`** 查看速查。
 
+### 常用命令
+
+```bash
+lingxi topic ls -p                  # 当前项目有哪些工作线
+lingxi topic show <topic>           # 某个工作线的完整概览
+lingxi timeline --since 7d          # 当前项目最近一周的历程
+lingxi search -s PDF 中文字体         # 跨 agent 搜会话原文
+lingxi show codex:da497af449db#42   # 打开某个会话第 42 条附近
+lingxi activity                     # 今天做了什么（含未提交改动）
+```
+
 ---
 
 ## 文档
 
 | 文档 | 内容 |
 |---|---|
-| [使用指南](docs/USAGE.md) | 日常流程、四个典型场景、怎么写交接包、卡片用法、使用习惯 |
+| [使用指南](docs/USAGE.md) | 日常流程、六个典型场景、怎么写交接包、卡片用法、使用习惯 |
 | [参考手册](docs/REFERENCE.md) | MCP 工具、CLI 命令、各 agent 的接入位置、数据与环境变量 |
 | [常见问题与排错](docs/TROUBLESHOOTING.md) | 连接问题、使用问题、卸载、常见疑问 |
 | [设计文档](docs/DESIGN.md) | 背景、架构、数据模型、路线图（开发者向） |
 | [更新日志](CHANGELOG.md) | 版本变化 |
 | [Skill](skills/lingxi/SKILL.md) | 给 agent 看的使用说明（自动安装到各 agent） |
+| [演示录制脚本](docs/DEMO.md) | 录制演示动图的分镜和示例数据 |
 
 ---
 
@@ -146,7 +160,7 @@ B 能答上来，就说明打通了。验收完用 `lingxi topic archive 灵犀�
 | P1-b 后台咨询 | 复制一份会话在后台回答问题（不打扰原会话） | 计划中 v0.3 |
 | P1-c 跨会话消息 | 在线登记、收件箱、pi 扩展实时插入、Claude Code / Codex 钩子投递 | 计划中 v0.4 |
 | P1.5 办公端写入 | 豆包、WorkBuddy 深度接入；对接飞书 `lark-cli` | 部分完成（MCP 已可用） |
-| P2 办公端之间互通 | WorkBuddy、Cursor 会话导入；在线检测；中文检索增强 | 计划中 |
+| P2 办公端之间互通 | Cursor 会话导入；在线检测；中文检索增强 | 计划中 |
 | P3 全面互通 | 后台服务（HTTP MCP、消息投递）；本地网页界面 | 计划中 |
 | P4 扩展 | Meta Muse 等远程 agent、多设备同步、团队共享 | 计划中 |
 
@@ -170,3 +184,7 @@ npm test             # vitest：存储、项目绑定、会话导入与查询、
 | `skills/lingxi` | 通用 Skill |
 | `docs` | 使用指南、参考手册、排错、设计文档 |
 | `test` | 单元测试与端到端测试 |
+
+## 许可
+
+尚未确定，目前保留所有权利（`UNLICENSED`）。正式发布前会补充开源许可。

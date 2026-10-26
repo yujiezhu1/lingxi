@@ -1,5 +1,11 @@
 # 更新日志
 
+## 未发布
+
+- README 增加痛点案例、「以前 vs 用灵犀」对照表、跨 agent 流程示意和常用命令；新增英文版 README.en.md。
+- 新增演示录制脚本 docs/DEMO.md 和示例数据脚本 scripts/demo-seed.mjs（npm run demo:seed，使用独立目录，不读取真实会话）。
+- GitHub 仓库添加主题标签。
+
 ## 0.2.1 — 2026-10-26
 
 - **豆包工作会话导入**：读取智能体模式的本地明文记录（`.doubaowork/agent_mode/workspace/.sessions/<会话ID>/agents/<agentID>/system/trajectory.jsonl`），只取主 agent；过滤 `<system-reminder>` 等注入内容；记录没有逐条时间戳，用户消息按 `assignment.md` 里每轮需求的时间对齐，其余消息沿用前一条用户消息的时间；记录可能被重写，所以变化后整文件重新导入。
