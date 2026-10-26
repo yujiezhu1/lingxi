@@ -82,7 +82,7 @@
 | pi | `~/.pi/agent/sessions/--<路径>--/<时间>_<id>.jsonl`，首行 `type:session` 含 `cwd`，有 `session_info.name` | JSONL（树结构，带 parentId） | ✅（扩展） | ✅ | ✅ 扩展（TypeScript） | ✅ `pi -p --fork <id> [--no-session]` |
 | Cursor | `~/.cursor/projects/<路径>/agent-transcripts/`；另有 `Cursor/User/globalStorage/state.vscdb`（SQLite） | 文本 / SQLite | ✅ | ✅ | ✅ `~/.cursor/hooks.json` | ⚠️ 需要安装 Cursor CLI（本机未装） |
 | WorkBuddy | `~/.workbuddy/projects/<路径>/<id>.jsonl`（类似 Claude Code 的格式）；`workbuddy.db` 的 `sessions` 表（标题、cwd、时间）；`~/.workbuddy/sessions/<pid>.json`（**在线心跳**） | JSONL + SQLite | ✅ `connectors/default/mcp.json` | ✅ | ❓ | ❌ |
-| 豆包工作 | 对话存在 `AppData/Local/DoubaoWork/User Data/Profile 1/IndexedDB/chrome_doubaowork-chat_*`（LevelDB，部分内容**加密**）；`~/DoubaoWork/chats/<日期>/<会话>/` 只是工作目录 | 加密 / 私有 | ✅ 自定义连接器，支持 stdio 和 HTTP（已确认） | ✅ `~/DoubaoWork/skills/` | ❌ | ❌ |
+| 豆包工作 | **智能体模式的对话是明文 JSONL**：`AppData/Local/DoubaoWork/User Data/Profile 1/.doubaowork/agent_mode/workspace/.sessions/<会话ID>/agents/<agentID>/system/trajectory.jsonl`（OpenAI 消息格式：role / content / tool_calls，无逐条时间戳）；同目录 `assignment.md` 按时间戳记录每轮用户需求；会话标题在 IndexedDB 的会话列表里（V8 序列化）。IndexedDB 里加密的（CryptoJS AES）是部分配置，例如连接器配置。`~/DoubaoWork/chats/<日期>/<会话>/` 只是工作目录 | JSONL | ✅ 自定义连接器，支持 stdio 和 HTTP（已确认） | ✅ `~/DoubaoWork/skills/` | ❌ | ❌ |
 
 **结论**
 
@@ -252,7 +252,7 @@ interface AgentAdapter {
 | pi | 消息有 `id/parentId` 构成的树，**只取当前分支**（从叶子回溯到根）；`session_info.name` 作为标题 | 扩展主动登记（最准确） |
 | cursor | 优先读 `~/.cursor/projects/*/agent-transcripts`；必要时读 `state.vscdb`，可参考 cass 的解析方式 | 记录文件修改时间 / hooks |
 | workbuddy | `projects/*/<id>.jsonl`（类似 Claude Code）+ `workbuddy.db.sessions` 取标题 | `~/.workbuddy/sessions/<pid>.json` 的心跳和 pid |
-| doubao | **不导入**（加密的私有存储）；只靠 MCP 主动写入 | MCP 调用时登记 |
+| doubao | 读 `.doubaowork/agent_mode/workspace/.sessions/*/agents/*/system/trajectory.jsonl`（只取 Role: main 的 agent）；用户消息的时间从 `assignment.md` 对齐，其余消息沿用前一条用户消息的时间；过滤 `<system-reminder>` 等注入内容；标题取第一条需求 | `trajectory.jsonl` 修改时间 |
 
 通用处理：
 
@@ -488,7 +488,7 @@ lingxi/
 | # | 问题 | 处理方式 |
 |---|---|---|
 | R1 | 各 agent 记录格式没有公开文档，可能随版本变化 | 适配器版本检测 + 样例回归测试 + 解析失败时降级 |
-| R2 | 豆包记录无法导入 | 依赖 MCP 主动写入 + Skill 引导；后续关注官方是否开放导出 |
+| R2 | ~~豆包记录无法导入~~ **更正（2026-10-26）**：豆包智能体模式的对话是本地明文 JSONL，可以导入；普通聊天模式的对话是否只在云端尚未确认 | 增加豆包适配器；无逐条时间戳，用 assignment.md 近似 |
 | R3 | 后台咨询的只读参数、费用、耗时 | P1 逐家核实参数；默认需要确认，并设置超时和费用上限 |
 | R4 | Codex、Cursor、办公端缺少推送能力 | 退化为下一轮时轮询，或由用户手动触发 |
 | R5 | 中文全文检索质量 | P0 用 trigram 分词，P2 加分词或向量检索 |
