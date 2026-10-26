@@ -279,8 +279,8 @@ program
   .description("Search handoffs and cards; with -s, search imported agent session transcripts")
   .option("--topic <topic>")
   .addOption(new Option("--type <type>").choices(["handoff", "card"]))
-  .option("-s, --sessions", "search Claude Code / Codex / pi session transcripts instead")
-  .option("--agent <agent>", "with -s: claude-code | codex | pi")
+  .option("-s, --sessions", "search imported agent session transcripts (Claude Code, Codex, pi, Doubao Work, WorkBuddy) instead")
+  .option("--agent <agent>", "with -s: claude-code | codex | pi | doubao | workbuddy")
   .option("-p, --project [path]", "with -s: only sessions inside this project (default: current directory)")
   .option("--since <time>", "with -s: e.g. 7d, 2026-10-01")
   .option("--tools", "with -s: also search tool calls / outputs")
@@ -319,9 +319,9 @@ function syncQuiet(s: LingxiStore): void {
 
 program
   .command("sync")
-  .description("Import / update Claude Code, Codex and pi session transcripts (incremental)")
+  .description("Import / update agent session transcripts: Claude Code, Codex, pi, Doubao Work, WorkBuddy (incremental)")
   .option("--full", "re-import everything from scratch")
-  .option("--agent <agent...>", "only these agents: claude-code codex pi")
+  .option("--agent <agent...>", "only these agents: claude-code codex pi doubao workbuddy")
   .action((o: { full?: boolean; agent?: string[] }) =>
     withStore((s) => {
       const r = new Ingestor(s).sync({ full: o.full, agents: o.agent });
@@ -336,7 +336,7 @@ program
 program
   .command("sessions")
   .description("List imported agent sessions (newest first)")
-  .option("--agent <agent>", "claude-code | codex | pi")
+  .option("--agent <agent>", "claude-code | codex | pi | doubao | workbuddy")
   .option("-p, --project [path]", "only sessions inside this project (default: current directory)")
   .option("--since <time>", "e.g. 7d, 2026-10-01")
   .option("-n, --limit <n>", "max items (default 20)", (v) => parseInt(v, 10))

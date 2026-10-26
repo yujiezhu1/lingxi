@@ -18,6 +18,8 @@ export interface ParsedMeta {
   /** Used only when no title is known yet (e.g. first user message). */
   fallbackTitle?: string;
   started_at?: number;
+  /** Last activity time when turns carry no precise timestamps (e.g. file mtime). */
+  ended_at?: number;
   meta?: Record<string, unknown>;
 }
 
@@ -31,8 +33,13 @@ export interface SessionAdapter {
   discover(): string[];
   /** Stable native session id derived from the file name. */
   nativeIdFromPath(file: string): string | null;
-  /** Parse one JSON line. Must be pure (no cross-line state). */
+  /** Parse one JSON line. Must be pure (no cross-line state). Used for append-only logs. */
   parseLine(obj: unknown): ParsedItem[];
+  /**
+   * Whole-file parser for logs that may be rewritten or need side files (e.g. Doubao Work).
+   * When present, a changed file is always re-imported from scratch instead of incrementally.
+   */
+  parseFile?(file: string, text: string, mtime: number): ParsedItem[];
   /** Optional title lookup from a side index (e.g. Codex session_index.jsonl). */
   titleFor?(nativeId: string): string | undefined;
 }

@@ -477,6 +477,7 @@ lingxi/
 | **P0 中枢** ✅ 2026-10-23 | core + SQLite + MCP（stdio）+ CLI 骨架 + 交接包、Topic、卡片 + 通用 Skill + `lingxi install` | 任意 agent（包括豆包、WorkBuddy）能 `save_handoff` / `load_handoff`。已验证：Codex 写入 → pi 读取；Claude Code、Codex、pi 的 MCP 连接正常；豆包和 WorkBuddy 待在应用内手动添加连接器 |
 | **P0.5 项目记忆** ✅ 2026-10-23 | 工作线绑定项目目录（多对多，按目录层级匹配）；时间线（MCP `topic_timeline` + `lingxi timeline`）；按用户要求**暂不**自动写入或注入 CLAUDE.md / AGENTS.md | 在项目子目录中能找到绑定的工作线；能按时间查看工作线 / 项目的历程 |
 | **P1-a 会话与活动** ✅ v0.2.0 | 导入 Claude Code、Codex、pi 会话（schema v2：sessions / turns / turns_fts；按字节偏移增量同步；查询前自动同步；不导入思考过程；工具输出截断；密钥打码）；MCP `list_sessions` / `search_sessions` / `read_session` / `get_activity`；`topic_get` 显示绑定项目的最近会话；CLI `sync` / `sessions` / `show` / `search -s` / `activity`；会话短引用用 UUID 末段（UUIDv7 开头会撞） | 真实数据首次导入 97 个会话约 2.6 秒，增量约 15 毫秒；pi 实测通过 get_activity 汇总当天工作 |
+| **P1-a+ 桌面端会话** ✅ v0.2.1 | 豆包工作适配器（智能体模式 trajectory.jsonl；只取 Role: main；用户消息时间按 assignment.md 对齐，其余沿用；整文件重新导入）；WorkBuddy 适配器（`<user_query>` 提取用户输入；每会话临时工作目录不当作项目）；无工作目录的会话在活动汇总里按 agent 分组；`~/.lingxi/redact.txt` 自定义打码 + 中文「密码：」规则 | 真实数据导入豆包 45 个会话、WorkBuddy 19 个；全部 5 家首次导入约 7.8 秒，增量约 50 毫秒 |
 | **P1 CLI 之间互通** | Claude Code、Codex、pi 适配器（导入 + 检索）+ pi 扩展（登记、实时消息）+ Claude Code 钩子 + `consult`（三家）+ `get_activity` | **场景 2 端到端跑通**；场景 4 可以检索 |
 | **P1.5 办公端只写入** | 豆包、WorkBuddy 的 MCP 和 Skill 接入；`get_activity` 开放给办公端；接入 lark-cli（路线 B） | **场景 1、场景 3 跑通** |
 | **P2 办公端之间互通** | WorkBuddy、Cursor 适配器 + 在线检测 + 中文检索增强（分词、向量） | 办公端之间互相检索和交接 |

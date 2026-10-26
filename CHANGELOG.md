@@ -1,5 +1,16 @@
 # 更新日志
 
+## 0.2.1 — 2026-10-26
+
+- **豆包工作会话导入**：读取智能体模式的本地明文记录（`.doubaowork/agent_mode/workspace/.sessions/<会话ID>/agents/<agentID>/system/trajectory.jsonl`），只取主 agent；过滤 `<system-reminder>` 等注入内容；记录没有逐条时间戳，用户消息按 `assignment.md` 里每轮需求的时间对齐，其余消息沿用前一条用户消息的时间；记录可能被重写，所以变化后整文件重新导入。
+  - 更正：之前认为豆包的对话是加密存储的，这是错的；加密的只是部分配置（如连接器配置）。
+- **WorkBuddy 会话导入**：从 `<user_query>` 中提取真正的用户输入；每个会话自动创建的临时工作目录不当作项目。
+- 没有工作目录的会话（豆包、WorkBuddy 临时目录）在活动汇总里按 agent 分组。
+- 打码增强：新增中文「密码 / 口令 / 密钥：…」规则；支持 `~/.lingxi/redact.txt` 自定义打码（字符串或 `re:` 正则）。
+- 新增环境变量 `LINGXI_DOUBAO_DIR`、`LINGXI_WORKBUDDY_DIR`；`LINGXI_INGEST` 可选值增加 `doubao`、`workbuddy`。
+- 会话短引用：非 UUID 的 id（如豆包的会话 ID）显示完整 id。
+
+
 ## 0.2.0 — 2026-10-23
 
 ### 会话导入与检索（P1-a）

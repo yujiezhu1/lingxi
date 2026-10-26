@@ -29,7 +29,7 @@ agent 通过这些工具读写灵犀。在 pi 里显示为 `mcp__lingxi__<工具
 | `recall` | `query?`, `topic?`, `kind?`, `limit?` | 查找知识卡片 |
 | `forget` | `id` | 归档一张卡片（不再出现在查找和搜索结果里） |
 | `search` | `query`, `topic?`, `type?`（handoff / card）, `limit?` | 跨所有交接包和卡片全文检索；多个词之间是「且」的关系，中英文都支持 |
-| `list_sessions` | `agent?`, `project?`, `since?`, `until?`, `limit?` | 列出自动导入的 Claude Code / Codex / pi 会话（最新在前） |
+| `list_sessions` | `agent?`, `project?`, `since?`, `until?`, `limit?` | 列出自动导入的会话（Claude Code / Codex / pi / 豆包工作 / WorkBuddy，最新在前） |
 | `search_sessions` | `query`, `agent?`, `project?`, `since?`, `until?`, `include_tools?`, `limit?` | 搜会话原文（默认只搜用户和助手的对话），结果带会话引用 |
 | `read_session` | `ref`, `before?`, `after?`, `from?`, `limit?`, `tools?`, `max_chars?` | 读会话：`codex:<id>`（最后 40 条对话）、`pi:<id>#42`（第 42 条前后，含工具）、`claude-code:<id>#10..30`（区间） |
 | `get_activity` | `date?`（today / yesterday / YYYY-MM-DD）或 `since?` / `until?`, `project?`, `git?` | 活动汇总：按项目列出会话、灵犀笔记、git 提交、当前未提交改动 |
@@ -83,7 +83,7 @@ lingxi forget <卡片ID>
 lingxi search <关键词...> [--topic X] [--type handoff|card] [-n 10]
 lingxi search -s <关键词...> [--agent codex] [-p [路径]] [--since 7d] [--tools] [-n 10]   # 搜会话原文
 
-# 会话（Claude Code / Codex / pi，自动导入）
+# 会话（Claude Code / Codex / pi / 豆包工作 / WorkBuddy，自动导入）
 lingxi sync [--full] [--agent claude-code codex pi]    # 手动同步（查询前也会自动增量同步）
 lingxi sessions [--agent X] [-p [路径]] [--since 7d] [-n 20]
 lingxi show <ref> [--tools] [--from N] [-n 40] [--context 6]
@@ -145,7 +145,8 @@ lingxi handoff load --topic XX调研 > research.md       # 导出成文件，可
 | 备份 | 复制 `~/.lingxi/` 整个目录即可 |
 
 - **纯本地**：不联网，不调用任何外部模型；所有内容都由你正在用的 agent 自己写入。
-- **会话导入**：只读取 `~/.claude/projects`、`~/.codex/sessions`、`~/.pi/agent/sessions`；不导入模型的思考过程；工具输出截断保存；常见密钥格式（`sk-…`、`Bearer …`、`api_key=…` 等）会被打码。可用 `LINGXI_INGEST` 关闭。
+- **会话导入**：只读取 `~/.claude/projects`、`~/.codex/sessions`、`~/.pi/agent/sessions`、豆包工作智能体模式的 `trajectory.jsonl`、`~/.workbuddy/projects`；不导入模型的思考过程；工具输出截断保存；常见密钥格式（`sk-…`、`Bearer …`、`api_key=…` 等）会被打码。可用 `LINGXI_INGEST` 关闭。
+- **自定义打码**：在 `~/.lingxi/redact.txt` 里每行写一个要打码的字符串（以 `re:` 开头表示正则，`#` 开头是注释），然后执行 `lingxi sync --full` 重新导入。适合密码这类没有固定格式、内置规则识别不了的内容。
 - **不要往灵犀里存密钥、token、密码**（Skill 也会提醒 agent 不要这样做）。
 
 ---
@@ -156,5 +157,6 @@ lingxi handoff load --topic XX调研 > research.md       # 导出成文件，可
 |---|---|
 | `LINGXI_HOME` | 数据目录，默认 `~/.lingxi`。在执行 `lingxi install` 之前设置，安装器会把它写进各 agent 的配置 |
 | `LINGXI_AGENT` | 写入记录时的来源 agent 名称。安装器会为每个 agent 自动设置；CLI 不设置时记为 `cli` |
-| `LINGXI_INGEST` | 要导入哪些 agent 的会话：逗号分隔（`claude-code,codex,pi`），`none` 关闭；默认全部 |
+| `LINGXI_INGEST` | 要导入哪些 agent 的会话：逗号分隔（`claude-code,codex,pi,doubao,workbuddy`），`none` 关闭；默认全部 |
+| `LINGXI_DOUBAO_DIR` / `LINGXI_WORKBUDDY_DIR` | 覆盖豆包工作（默认 `%LOCALAPPDATA%/DoubaoWork/User Data/Profile 1/.doubaowork/agent_mode/workspace/.sessions`）和 WorkBuddy（默认 `~/.workbuddy/projects`）的会话目录 |
 | `LINGXI_CLAUDE_DIR` / `LINGXI_CODEX_DIR` / `LINGXI_PI_DIR` | 覆盖会话记录目录（默认 `~/.claude/projects`、`~/.codex`、`~/.pi/agent/sessions`） |

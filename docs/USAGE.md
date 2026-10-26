@@ -37,7 +37,7 @@ lingxi topic ls [-p]              # 有哪些工作线（-p：只看当前项目
 lingxi topic show <topic>         # 某个工作线的完整概览
 lingxi timeline [topic] --since 7d  # 历程（不传 topic = 当前项目）
 lingxi search <关键词>             # 搜交接包和卡片
-lingxi search -s <关键词>          # 搜 Claude Code / Codex / pi 的会话原文
+lingxi search -s <关键词>          # 搜各 agent 的会话原文（含豆包、WorkBuddy）
 lingxi activity                   # 今天做了什么（含未提交改动）
 lingxi topic archive <topic>      # 做完的收起来
 lingxi recall --kind todo         # 跨会话的待办
@@ -124,6 +124,8 @@ lingxi recall --kind todo         # 还有哪些跨会话的待办
 
 > 把「导出使用 Playwright 渲染 PDF，只支持 A4 竖版」记成灵犀里「导出需求」的决策。
 
+> 💡 在豆包里忘了说「保存交接」也没关系：豆包的会话会被自动导入，在 Codex 里可以直接说「在灵犀里搜一下豆包里关于导出需求的对话」。
+
 > 💡 如果想让 CLI 自己直接读写飞书、少切几次工具，可以另外装飞书官方的 `lark-cli`（`npx @larksuite/cli@latest install`），详见[设计文档](DESIGN.md) §12.7。
 
 ---
@@ -159,7 +161,7 @@ lingxi recall --kind todo         # 还有哪些跨会话的待办
 
 可以关联的类型：`project`（项目目录）· `session`（会话，如 `codex:<会话ID>`）· `handoff` · `card` · `path`（文件路径）· `url` · `topic`。
 
-> 💡 Claude Code、Codex、pi 的会话记录会被自动导入，不用提前保存也能搜到以前会话里的原文，见[场景五](#场景五找回没保存过的内容)。
+> 💡 Claude Code、Codex、pi、豆包工作、WorkBuddy 的会话记录会被自动导入，不用提前保存也能搜到以前会话里的原文，见[场景五](#场景五找回没保存过的内容)。
 
 ---
 
@@ -204,7 +206,7 @@ lingxi topic new my-app -d "my-app 的背景、决策与进度" -p     # -p 不�
 
 ## 场景五：找回没保存过的内容
 
-Claude Code、Codex、pi 的会话记录会被**自动导入**灵犀（只读、增量，平时只要几十毫秒），所以即使当时没说「保存交接」，事后也能找回来。
+Claude Code、Codex、pi、豆包工作、WorkBuddy 的会话记录会被**自动导入**灵犀（只读、增量，平时只要几十毫秒），所以即使当时没说「保存交接」，事后也能找回来。
 
 > 在灵犀里搜一下，之前哪个会话聊过「PDF 中文字体」？
 > 打开那个会话第 42 条附近看看当时的结论。
@@ -222,7 +224,7 @@ lingxi show pi:16eb5ec3b871#42         # 看第 42 条前后（含工具调用�
 会话引用的格式是 `<agent>:<id 末段>#<序号>`，例如 `codex:da497af449db#42`；也可以用 id 开头几位。
 
 > 找到有价值的结论后，记得让 agent「把这个记到灵犀」，下次就不用再翻原文了。
-> 豆包、WorkBuddy、Cursor 的会话暂不导入（豆包智能体模式的对话其实是本地明文记录，适配器开发中）。
+> 豆包工作只导入**智能体模式**的会话（本地有明文记录）；豆包的记录没有逐条时间，按每轮需求的时间近似。Cursor 的会话暂不导入。
 
 ---
 

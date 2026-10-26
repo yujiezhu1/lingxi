@@ -48,13 +48,19 @@ pi mcp list              # pi：lingxi: connected, 17 tools
 - 多个关键词之间是「且」的关系，减少关键词试试。
 - `search` 只搜交接包和卡片；搜会话原文用 `search_sessions`（终端 `lingxi search -s`）。
 - 会话搜索默认不搜工具输出，需要时加 `include_tools`（终端 `--tools`）。
-- 豆包、WorkBuddy、Cursor 的会话暂不导入。
+- Cursor 的会话暂不导入；豆包工作只导入智能体模式的会话。
 
 ### 会话没导入 / 不是最新
 
 - 查询时会自动增量同步；也可以手动 `lingxi sync`，看各 agent 的文件数和错误。
 - 数据不对时可以 `lingxi sync --full` 全部重建。
 - 检查是否设置了 `LINGXI_INGEST=none`。
+
+### 会话里有密码等敏感信息
+
+- 内置规则会给 `sk-…`、`Bearer …`、`api_key=…`、`密码：…` 这类有标签或固定格式的内容打码，但识别不了没有标签的密码（比如浏览器自动化时直接输入的密码）。
+- 把这些字符串写进 `~/.lingxi/redact.txt`（每行一个，`re:` 开头表示正则），再执行 `lingxi sync --full`。
+- 注意：原始记录仍然在各 agent 自己的目录里，灵犀打码不影响原文件；必要时修改密码。
 
 ### 不想让某些会话被导入
 

@@ -149,9 +149,10 @@ export function activityReport(
   for (const r of rows) {
     const cwd = r.cwd ? normalizeProjectPath(r.cwd) : "(unknown)";
     const gitRoot = r.cwd ? findGitRoot(r.cwd) : null;
-    const root = gitRoot ?? (r.cwd ? boundRoot(r.cwd) : null) ?? cwd;
+    // Sessions without a working directory (e.g. Doubao Work) are grouped per agent.
+    const root = gitRoot ?? (r.cwd ? boundRoot(r.cwd) : null) ?? (r.cwd ? cwd : `(${r.agent}: no project directory)`);
     if (opts.project) {
-      const m = r.cwd ? matchProject(opts.project, r.cwd) : null;
+      const m = r.cwd ? matchProject(opts.project, r.cwd) : null; // cwd-less sessions never match a project filter
       if (m !== "exact" && m !== "ancestor") continue;
     }
     const fu = firstUser.get(r.id, since, until) as { text: string } | undefined;

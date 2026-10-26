@@ -3,22 +3,22 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { LingxiStore, activityReport, fmtActivity, listSessions, readSession, resolveSessionRef, searchSessions, shortRef } from "../src/core/index.js";
-import { Ingestor, claudeAdapter, codexAdapter, piAdapter, redact } from "../src/ingest/index.js";
+import { Ingestor, claudeAdapter, codexAdapter, doubaoAdapter, piAdapter, redact, workbuddyAdapter } from "../src/ingest/index.js";
 
 let tmp: string;
 let store: LingxiStore;
-let dirs: { claude: string; codex: string; pi: string; project: string };
+let dirs: { claude: string; codex: string; pi: string; doubao: string; workbuddy: string; project: string };
 
 const jl = (...objs: unknown[]) => objs.map((o) => JSON.stringify(o)).join("\n") + "\n";
 const T = (min: number) => new Date(Date.now() - 60 * 60_000 + min * 60_000).toISOString();
 
 function ingestor() {
-  return new Ingestor(store, [claudeAdapter(dirs.claude), codexAdapter(dirs.codex), piAdapter(dirs.pi)]);
+  return new Ingestor(store, [claudeAdapter(dirs.claude), codexAdapter(dirs.codex), piAdapter(dirs.pi), doubaoAdapter(dirs.doubao), workbuddyAdapter(dirs.workbuddy)]);
 }
 
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), "lingxi-ingest-"));
-  dirs = { claude: join(tmp, "claude"), codex: join(tmp, ".codex"), pi: join(tmp, "pi"), project: join(tmp, "proj") };
+  dirs = { claude: join(tmp, "claude"), codex: join(tmp, ".codex"), pi: join(tmp, "pi"), doubao: join(tmp, "doubao"), workbuddy: join(tmp, "wb"), project: join(tmp, "proj") };
   mkdirSync(dirs.project, { recursive: true });
   store = new LingxiStore({ home: join(tmp, "home") });
 
@@ -83,6 +83,8 @@ describe("ingestion", () => {
       ["claude-code", 1, 0],
       ["codex", 1, 0],
       ["pi", 1, 0],
+      ["doubao", 0, 0],
+      ["workbuddy", 0, 0],
     ]);
     const all = listSessions(store.db, { limit: 10 });
     const byAgent = Object.fromEntries(all.map((s) => [s.agent, s]));

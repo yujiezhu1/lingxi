@@ -45,7 +45,7 @@ const SESSION_COLS = "id, agent, native_id, title, cwd, started_at, updated_at, 
 export function shortRef(s: { agent: string; native_id: string }): string {
   const id = s.native_id.split("~")[0]!;
   const m = id.match(/-([0-9a-f]{12})$/i);
-  return `${s.agent}:${m ? m[1] : id.slice(0, 12)}`;
+  return `${s.agent}:${m ? m[1] : id.length <= 24 ? id : id.slice(0, 16)}`;
 }
 
 /** shortRef from a stored session id ('<agent>:<nativeId>'). */

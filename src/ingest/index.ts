@@ -3,18 +3,20 @@ import { createHash } from "node:crypto";
 import type { LingxiStore } from "../core/store.js";
 import { claudeAdapter } from "./claude.js";
 import { codexAdapter } from "./codex.js";
+import { doubaoAdapter } from "./doubao.js";
+import { workbuddyAdapter } from "./workbuddy.js";
 import { piAdapter } from "./pi.js";
-import { redact } from "./redact.js";
+import { customRules, redact } from "./redact.js";
 import type { ParsedItem, SessionAdapter } from "./types.js";
 
 export * from "./types.js";
-export { claudeAdapter, codexAdapter, piAdapter, redact };
+export { claudeAdapter, codexAdapter, doubaoAdapter, piAdapter, redact, workbuddyAdapter };
 
-export const INGEST_AGENTS = ["claude-code", "codex", "pi"] as const;
+export const INGEST_AGENTS = ["claude-code", "codex", "pi", "doubao", "workbuddy"] as const;
 
 /** Adapters enabled by LINGXI_INGEST (comma list, "none" to disable; default: all). */
 export function defaultAdapters(): SessionAdapter[] {
-  const all = [claudeAdapter(), codexAdapter(), piAdapter()];
+  const all = [claudeAdapter(), codexAdapter(), piAdapter(), doubaoAdapter(), workbuddyAdapter()];
   const env = process.env.LINGXI_INGEST?.trim();
   if (!env) return all;
   if (env === "none") return [];
@@ -113,8 +115,10 @@ export class Ingestor {
     const nativeId = a.nativeIdFromPath(file);
     if (!nativeId) return { changed: false, created: false, turns: 0 };
 
-    let start = row?.source_offset ?? 0;
-    const truncated = !!row && size < row.source_offset;
+    const whole = typeof a.parseFile === "function";
+    let start = whole ? 0 : (row?.source_offset ?? 0);
+    // "truncated" = re-import from scratch: the file shrank, or the adapter always re-parses whole files.
+    const truncated = !!row && (whole || size < row.source_offset);
     if (truncated) start = 0;
 
     // Read the new bytes and keep only complete lines.
@@ -136,13 +140,17 @@ export class Ingestor {
       }
     }
     const items: ParsedItem[] = [];
-    for (const line of text.split("\n")) {
-      const l = line.trim();
-      if (!l) continue;
-      try {
-        items.push(...a.parseLine(JSON.parse(l)));
-      } catch {
-        /* malformed line */
+    if (whole) {
+      items.push(...a.parseFile!(file, text, mtime));
+    } else {
+      for (const line of text.split("\n")) {
+        const l = line.trim();
+        if (!l) continue;
+        try {
+          items.push(...a.parseLine(JSON.parse(l)));
+        } catch {
+          /* malformed line */
+        }
       }
     }
 
@@ -151,13 +159,16 @@ export class Ingestor {
     db.exec("BEGIN IMMEDIATE");
     try {
       row = getRow(); // re-read inside the write lock (another process may have synced meanwhile)
-      if (row && !truncated && row.source_offset !== start) {
+      const raced = whole
+        ? !!row && row.source_size === size && row.source_mtime === mtime
+        : !!row && !truncated && row.source_offset !== start;
+      if (raced) {
         db.exec("ROLLBACK");
         return { changed: false, created: false, turns: 0 };
       }
       if (truncated && row) {
         db.prepare("DELETE FROM turns WHERE session_id = ?").run(row.id);
-        db.prepare("UPDATE sessions SET turn_count = 0, source_offset = 0 WHERE id = ?").run(row.id);
+        db.prepare("UPDATE sessions SET turn_count = 0, source_offset = 0, started_at = NULL, updated_at = NULL WHERE id = ?").run(row.id);
         row = getRow();
       }
       if (!row) {
@@ -177,6 +188,7 @@ export class Ingestor {
       let updatedAt = row.updated_at;
       let seq = row.turn_count;
       const ins = db.prepare("INSERT INTO turns (session_id, seq, role, ts, text, tool_name) VALUES (?,?,?,?,?,?)");
+      const extra = customRules(this.store.home);
 
       for (const it of items) {
         if (it.kind === "meta") {
@@ -189,11 +201,12 @@ export class Ingestor {
             titleSource = "fallback";
           }
           if (it.started_at && (!startedAt || it.started_at < startedAt)) startedAt = it.started_at;
+          if (it.ended_at && (!updatedAt || it.ended_at > updatedAt)) updatedAt = it.ended_at;
           if (it.meta) Object.assign(meta, it.meta);
           continue;
         }
         seq += 1;
-        ins.run(row.id, seq, it.role, it.ts, redact(it.text), it.tool_name ?? null);
+        ins.run(row.id, seq, it.role, it.ts, redact(it.text, extra), it.tool_name ?? null);
         inserted += 1;
         if (it.ts) {
           if (!updatedAt || it.ts > updatedAt) updatedAt = it.ts;

@@ -29,7 +29,7 @@ available, use the CLI: `lingxi <command>` (run `lingxi --help`).
 | Creating a topic for work inside a code project | `topic_create` with `project=<repo root>` (or `topic_link target_type=project` later) |
 | User asks how a topic/project evolved, "开发历程", "进度", "最近做了什么" | `topic_timeline topic=<topic>` or `topic_timeline project=<path>` (use `since`, e.g. `7d`) |
 | Updating a topic whose earlier handoff is now outdated | `save_handoff` with `supersedes=<old id>` |
-| Something was discussed in another Claude Code / Codex / pi session but never saved | `search_sessions <keywords>` → `read_session <ref>` (refs look like `codex:da497af449db#42`) |
+| Something was discussed in another session (Claude Code / Codex / pi / 豆包工作 / WorkBuddy) but never saved | `search_sessions <keywords>` → `read_session <ref>` (refs look like `codex:da497af449db#42`) |
 | "上次在 Codex / pi 里聊到哪了", find a past session of this project | `list_sessions project=<cwd>` (or `agent=`), then `read_session` |
 | Daily / weekly report (日报、周报), "今天做了什么", "where did I leave off" | `get_activity` (date=today / yesterday / YYYY-MM-DD, or since=7d) — includes uncommitted git changes |
 
