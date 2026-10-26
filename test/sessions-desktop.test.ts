@@ -60,7 +60,7 @@ describe("helpers", () => {
 describe("Doubao Work adapter", () => {
   it("imports main-agent transcripts, skips injected text and sub-agents, times user turns from assignment.md", () => {
     writeDoubao(
-      "38440180389549826",
+      "38440000000000001",
       "m_main",
       "main",
       [
@@ -77,11 +77,11 @@ describe("Doubao Work adapter", () => {
         [30, "按你的推荐来"],
       ],
     );
-    writeDoubao("38440180389549826", "m_sub", "subagent", [{ role: "user", content: "sub task" }], [[1, "sub task"]]);
+    writeDoubao("38440000000000001", "m_sub", "subagent", [{ role: "user", content: "sub task" }], [[1, "sub task"]]);
 
     ingestor().sync();
-    const s = resolveSessionRef(store.db, "doubao:38440180389549826").session;
-    expect(shortRef(s)).toBe("doubao:38440180389549826");
+    const s = resolveSessionRef(store.db, "doubao:38440000000000001").session;
+    expect(shortRef(s)).toBe("doubao:38440000000000001");
     expect(s.title).toBe("我现在想要做一个工作记录的技能");
     expect(s.cwd).toBeNull();
     const turns = store.db.prepare("SELECT role, ts, text FROM turns WHERE session_id = ? ORDER BY seq").all(s.id) as {

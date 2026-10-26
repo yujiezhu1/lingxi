@@ -210,7 +210,7 @@ Claude Code、Codex、pi、豆包工作、WorkBuddy 的会话记录会被**自�
 
 > 在灵犀里搜一下，之前哪个会话聊过「PDF 中文字体」？
 > 打开那个会话第 42 条附近看看当时的结论。
-> 上次在 Codex 里做 aifchem 接口对接，聊到哪了？
+> 上次在 Codex 里做支付接口对接，聊到哪了？
 
 agent 会依次调用 `search_sessions` → `read_session`（或 `list_sessions`）。终端里：
 
