@@ -297,7 +297,7 @@ interface AgentAdapter {
 2. 心跳：WorkBuddy 的 `sessions/*.json`；
 3. 推断：记录文件 N 分钟内有修改，并且进程还在。
 
-### 10.2 消息投递
+### 10.2 消息投递（v0.4.0 已实现，见下方实现说明）
 
 | 目标 agent | 投递方式 | 实时性 |
 |---|---|---|
@@ -483,6 +483,7 @@ lingxi/
 | **P1-a 会话与活动** ✅ v0.2.0 | 导入 Claude Code、Codex、pi 会话（schema v2：sessions / turns / turns_fts；按字节偏移增量同步；查询前自动同步；不导入思考过程；工具输出截断；密钥打码）；MCP `list_sessions` / `search_sessions` / `read_session` / `get_activity`；`topic_get` 显示绑定项目的最近会话；CLI `sync` / `sessions` / `show` / `search -s` / `activity`；会话短引用用 UUID 末段（UUIDv7 开头会撞） | 真实数据首次导入 97 个会话约 2.6 秒，增量约 15 毫秒；pi 实测通过 get_activity 汇总当天工作 |
 | **P1-a+ 桌面端会话** ✅ v0.2.1 | 豆包工作适配器（智能体模式 trajectory.jsonl；只取 Role: main；用户消息时间按 assignment.md 对齐，其余沿用；整文件重新导入）；WorkBuddy 适配器（`<user_query>` 提取用户输入；每会话临时工作目录不当作项目）；无工作目录的会话在活动汇总里按 agent 分组；`~/.lingxi/redact.txt` 自定义打码 + 中文「密码：」规则 | 真实数据导入豆包 45 个会话、WorkBuddy 19 个；全部 5 家首次导入约 7.8 秒，增量约 50 毫秒 |
 | **P1-b 后台咨询** ✅ v0.3.0 | `consult_session` / `lingxi consult`；费用估算 + 确认（`LINGXI_CONSULT_AUTOCONFIRM_TOKENS` 可设免确认阈值）；只读、不保存；进度通知；安装器调长工具超时 | pi、Codex 实测通过，pi 通过 MCP 真实调用 Codex 会话咨询成功；Claude Code 因本地 API 代理未开启尚未实测 |
+| **P1-c 跨会话消息** ✅ v0.4.0 | schema v3（presence / messages / message_reads）；身份 = `<agent>:<会话ID>`（环境变量 → 扩展或钩子登记 → 会话记录推断 → 进程号）；收件人：标签 / 会话引用 / `topic:` / `project:` / `all`，读取时匹配、按读者记已读；投递：pi 扩展实时（空闲新开一轮、忙时 follow-up）、Claude Code / Codex 钩子（`--hooks`，SessionStart + UserPromptSubmit 注入 additionalContext）、所有灵犀工具结果附未读提醒、`check_inbox`；MCP `whoami` / `register` / `list_agents` / `send_message` / `check_inbox`；CLI `who` / `send` / `inbox` / `hook`；会话记录被删除时同步移除 | 真实验证：Codex 发消息 → pi 扩展实时收到并处理 → 用 reply_to 回复 → Codex 会话收件箱收到；56 个测试 |
 | **P1 CLI 之间互通** | Claude Code、Codex、pi 适配器（导入 + 检索）+ pi 扩展（登记、实时消息）+ Claude Code 钩子 + `consult`（三家）+ `get_activity` | **场景 2 端到端跑通**；场景 4 可以检索 |
 | **P1.5 办公端只写入** | 豆包、WorkBuddy 的 MCP 和 Skill 接入；`get_activity` 开放给办公端；接入 lark-cli（路线 B） | **场景 1、场景 3 跑通** |
 | **P2 办公端之间互通** | WorkBuddy、Cursor 适配器 + 在线检测 + 中文检索增强（分词、向量） | 办公端之间互相检索和交接 |

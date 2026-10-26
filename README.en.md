@@ -35,7 +35,7 @@ Lingxi is a **local context hub shared by all your agents**. Handoffs, knowledge
 |---|---|
 | Re-explain everything when switching agents | Say "save a handoff" before switching, "load topic X" in the new session |
 | Copy-paste requirements from your office agent into the CLI | The office agent writes to Lingxi directly; even if you forgot, the CLI can search the original conversation |
-| Relay research conclusions and dev constraints by hand | One topic: the research session saves conclusions, the dev session records constraints, each reads the other's |
+| Relay research conclusions and dev constraints by hand | One topic for both; when something changes, `send_message` — pi receives it in real time |
 | "Which session discussed this?" | `search_sessions` searches raw transcripts across 5 agents and opens hits by reference |
 | Only that old session knows the detail | `consult_session` lets a read-only copy of it answer directly; the original is untouched |
 | Every new session re-learns the project | Bind a topic to the project directory to keep status, decisions and dead ends; "load the project background" |
@@ -68,12 +68,13 @@ Lingxi is a **local context hub shared by all your agents**. Handoffs, knowledge
 - 🧠 **Project memory** — bind topics to project directories; keep background, decisions, dead ends and progress, with a timeline of how the project evolved.
 - 🔎 **Searchable and cumulative** — everything persists, with full-text search that works for Chinese and English; newer handoffs supersede older ones while history is kept.
 - 🗂️ **Recover what you never saved** — transcripts from Claude Code, Codex, pi, Doubao Work and WorkBuddy are imported automatically (read-only, incremental).
+- 📨 **Message between live sessions** — running sessions can message each other: pi receives and acts in real time, Claude Code / Codex get messages on their next turn — no human courier.
 - 💬 **Ask a past session** — a read-only, non-persisted copy of a past Claude Code / Codex / pi session answers with its full context, without switching tools or disturbing the original (costs tokens; confirmation required by default).
 - 📝 **Activity reports** — one sentence summarizes today / this week across agents: what you asked, what got committed, and what is still uncommitted.
 - 🔒 **Local only** — data lives in `~/.lingxi/`; no network access, no external model calls. Thinking traces are not imported; common secret formats are masked.
 - 🧩 **Vendor-neutral** — built on MCP and Agent Skills; supports Claude Code, Codex, pi, Cursor, WorkBuddy and Doubao Work, and new agents only need an adapter.
 
-**Current version: v0.3.0.** Cross-session messaging is on the [roadmap](#roadmap).
+**Current version: v0.4.0** (see the [roadmap](#roadmap)).
 
 ---
 
@@ -133,6 +134,8 @@ lingxi timeline --since 7d          # how the current project evolved this week
 lingxi search -s "pdf font"         # search raw transcripts across agents
 lingxi show codex:da497af449db#42   # open a session around turn 42
 lingxi activity                     # what happened today, incl. uncommitted changes
+lingxi who                          # which sessions are online
+lingxi send research-pdf "uses FastAPI"   # message a session
 ```
 
 ---
@@ -150,7 +153,7 @@ Detailed docs are currently in Chinese:
 | [Changelog](CHANGELOG.md) | Version history |
 | [Skill](skills/lingxi/SKILL.md) | Instructions for agents (English; installed into each agent) |
 
-### MCP tools (18)
+### MCP tools (23)
 
 | Group | Tools |
 |---|---|
@@ -160,6 +163,7 @@ Detailed docs are currently in Chinese:
 | Search | `search` (handoffs + cards) |
 | Sessions & activity | `list_sessions`, `search_sessions`, `read_session`, `get_activity` |
 | Consultation | `consult_session` |
+| Messaging | `whoami`, `register`, `list_agents`, `send_message`, `check_inbox` |
 
 ---
 
@@ -172,7 +176,7 @@ Detailed docs are currently in Chinese:
 | P1-a Sessions & activity | Import Claude Code / Codex / pi transcripts, search and read them; activity report incl. uncommitted changes | ✅ v0.2.0 |
 | P1-a+ Desktop agents | Import Doubao Work (agent mode) and WorkBuddy transcripts; custom redaction rules | ✅ v0.2.1 |
 | P1-b Background consultation | Ask a read-only, non-persisted copy of a past session; size estimate + confirmation | ✅ v0.3.0 |
-| P1-c Cross-session messaging | Presence, inbox, live delivery via a pi extension and Claude Code / Codex hooks | Planned v0.4 |
+| P1-c Cross-session messaging | Presence, inbox, real-time delivery via a pi extension, Claude Code / Codex hooks, unread notices | ✅ v0.4.0 |
 | P2 | Cursor transcripts, presence detection, better CJK search | Planned |
 | P3 | Background service (HTTP MCP, message delivery), local web UI | Planned |
 | P4 | Remote agents, multi-device sync, team sharing | Planned |

@@ -12,11 +12,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 const CLI = resolve(__dirname, "../dist/cli/index.js");
 let home: string;
 
-async function connect(agent: string, clientName: string): Promise<Client> {
+async function connect(agent: string, clientName: string, extraEnv: Record<string, string> = {}): Promise<Client> {
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [CLI, "mcp"],
-    env: { ...(process.env as Record<string, string>), LINGXI_HOME: home, LINGXI_AGENT: agent, LINGXI_INGEST: "none" },
+    env: { ...(process.env as Record<string, string>), LINGXI_HOME: home, LINGXI_AGENT: agent, LINGXI_INGEST: "none", PI_SESSION_ID: "", CODEX_THREAD_ID: "", ...extraEnv },
   });
   const client = new Client({ name: clientName, version: "0.0.0" });
   await client.connect(transport);
@@ -39,7 +39,7 @@ describe("MCP stdio server", () => {
     try {
       const tools = (await doubao.listTools()).tools.map((t) => t.name).sort();
       expect(tools).toEqual(
-        ["consult_session", "forget", "get_activity", "list_handoffs", "list_sessions", "load_handoff", "read_session", "recall", "remember", "save_handoff", "search", "search_sessions", "topic_create", "topic_get", "topic_link", "topic_list", "topic_timeline", "topic_unlink"].sort(),
+        ["check_inbox", "consult_session", "forget", "list_agents", "register", "send_message", "whoami", "get_activity", "list_handoffs", "list_sessions", "load_handoff", "read_session", "recall", "remember", "save_handoff", "search", "search_sessions", "topic_create", "topic_get", "topic_link", "topic_list", "topic_timeline", "topic_unlink"].sort(),
       );
 
       const saved = text(
@@ -85,6 +85,36 @@ describe("MCP stdio server", () => {
     } finally {
       await doubao.close();
       await codex.close();
+    }
+  }, 30000);
+
+  it("delivers messages between two live sessions, with an unread notice on other tool calls", async () => {
+    const research = await connect("pi", "pi", { PI_SESSION_ID: "01a17000-1111-7000-8000-aaaaaaaaaaaa" });
+    const dev = await connect("pi", "pi", { PI_SESSION_ID: "01a17000-2222-7000-8000-bbbbbbbbbbbb" });
+    try {
+      expect(text(await research.callTool({ name: "register", arguments: { label: "research-pdf", activity: "调研 PDF 方案" } }))).toContain("research-pdf");
+      expect(text(await dev.callTool({ name: "whoami", arguments: {} }))).toContain("pi:bbbbbbbbbbbb");
+      const agents = text(await dev.callTool({ name: "list_agents", arguments: {} }));
+      expect(agents).toContain("research-pdf");
+      expect(agents).toContain("调研 PDF 方案");
+
+      const sent = text(await dev.callTool({ name: "send_message", arguments: { to: "research-pdf", body: "项目实际用 FastAPI，请评估方案 B", kind: "request" } }));
+      expect(sent).toMatch(/Sent msg_.* Online now: research-pdf/);
+
+      const other = text(await research.callTool({ name: "topic_list", arguments: {} }));
+      expect(other).toContain("📬 1 unread Lingxi message");
+
+      const inbox = text(await research.callTool({ name: "check_inbox", arguments: {} }));
+      expect(inbox).toContain("项目实际用 FastAPI");
+      expect(inbox).toContain("[request]");
+      const id = inbox.match(/msg_[0-9a-z_]+/)![0];
+      expect(text(await research.callTool({ name: "check_inbox", arguments: {} }))).toBe("No new messages.");
+
+      await research.callTool({ name: "send_message", arguments: { to: "", reply_to: id, body: "方案 B 在 FastAPI 下可行" } });
+      expect(text(await dev.callTool({ name: "check_inbox", arguments: {} }))).toContain("方案 B 在 FastAPI 下可行");
+    } finally {
+      await research.close();
+      await dev.close();
     }
   }, 30000);
 });

@@ -107,6 +107,45 @@ const MIGRATIONS: string[] = [
     INSERT INTO turns_fts(turns_fts, rowid, text) VALUES ('delete', old.id, old.text);
   END;
   `,
+  // v3 \u2014 v0.4: cross-session messaging
+  `
+  CREATE TABLE presence (
+    key            TEXT PRIMARY KEY,         -- '<agent>:<nativeSessionId>' or '<agent>#pid<pid>'
+    agent          TEXT NOT NULL,
+    session_native TEXT,
+    label          TEXT,
+    cwd            TEXT,
+    pid            INTEGER,
+    via            TEXT,                     -- mcp | pi-extension | hook | cli
+    topics         TEXT NOT NULL DEFAULT '[]',
+    activity       TEXT,
+    started_at     INTEGER,
+    last_seen      INTEGER NOT NULL
+  );
+  CREATE INDEX idx_presence_label ON presence(label);
+
+  CREATE TABLE messages (
+    id         TEXT PRIMARY KEY,
+    from_key   TEXT,
+    from_agent TEXT,
+    from_label TEXT,
+    to_kind    TEXT NOT NULL,                -- session | label | topic | project | all
+    to_value   TEXT NOT NULL,
+    kind       TEXT NOT NULL DEFAULT 'note', -- note | question | answer | request | notify
+    body       TEXT NOT NULL,
+    refs       TEXT NOT NULL DEFAULT '[]',
+    reply_to   TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX idx_messages_created ON messages(created_at DESC);
+
+  CREATE TABLE message_reads (
+    message_id TEXT NOT NULL,
+    reader_key TEXT NOT NULL,
+    read_at    INTEGER NOT NULL,
+    PRIMARY KEY (message_id, reader_key)
+  );
+  `,
 ];
 
 export function openDb(file: string): DatabaseSync {

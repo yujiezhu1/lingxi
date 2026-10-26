@@ -32,6 +32,11 @@ agent 通过这些工具读写灵犀。在 pi 里显示为 `mcp__lingxi__<工具
 | `list_sessions` | `agent?`, `project?`, `since?`, `until?`, `limit?` | 列出自动导入的会话（Claude Code / Codex / pi / 豆包工作 / WorkBuddy，最新在前） |
 | `search_sessions` | `query`, `agent?`, `project?`, `since?`, `until?`, `include_tools?`, `limit?` | 搜会话原文（默认只搜用户和助手的对话），结果带会话引用 |
 | `read_session` | `ref`, `before?`, `after?`, `from?`, `limit?`, `tools?`, `max_chars?` | 读会话：`codex:<id>`（最后 40 条对话）、`pi:<id>#42`（第 42 条前后，含工具）、`claude-code:<id>#10..30`（区间） |
+| `whoami` | — | 本会话在灵犀里的身份：agent、会话引用、标签、目录、加入的工作线 |
+| `register` | `label?`, `topics?`, `activity?` | 设置好记的标签、加入工作线、说明正在做什么 |
+| `list_agents` | `all?` | 在线会话列表（消息的收件人） |
+| `send_message` | `to`, `body`, `kind?`, `refs?`, `reply_to?` | 给其他会话发消息；`to` 可以是标签、会话引用、`topic:<名称>`、`project:<路径>`、`all`；回复时用 `reply_to`（`to` 可留空） |
+| `check_inbox` | `mark_read?`, `include_read?`, `limit?` | 读取发给本会话的消息 |
 | `consult_session` | `ref`, `question`, `confirm?`, `model?`, `timeout_sec?`, `save_to_topic?` | 后台咨询：让历史会话（Claude Code / Codex / pi）的只读副本带着完整上下文回答问题。不带 `confirm` 时只返回大小估算；`confirm=true` 才真正执行（产生模型费用） |
 | `get_activity` | `date?`（today / yesterday / YYYY-MM-DD）或 `since?` / `until?`, `project?`, `git?` | 活动汇总：按项目列出会话、灵犀笔记、git 提交、当前未提交改动 |
 
@@ -42,6 +47,8 @@ agent 通过这些工具读写灵犀。在 pi 里显示为 `mcp__lingxi__<工具
 | 卡片 `kind` | `decision` · `fact` · `finding` · `constraint` · `todo` · `dead_end` · `note` |
 | 关联 `target_type` | `project`（项目目录）· `session`（如 `codex:<会话ID>`）· `handoff` · `card` · `path` · `url` · `topic` |
 | 时间 `since` / `until` | 相对时间 `30m`、`12h`、`7d`、`2w`；或日期 `2026-10-23`、`2026-10-23 15:30` |
+| 消息类型 `kind` | `note`（默认）· `question` · `answer` · `request` · `notify` |
+| 消息收件人 `to` | 标签（如 `research-pdf`）· 会话引用（如 `codex:da497af449db`）· `topic:<名称>` · `project:<绝对路径>` · `all` |
 | 会话引用 `ref` | `<agent>:<id 末段或开头>`，可加 `#序号` 或 `#起..止`，如 `codex:da497af449db#42`、`pi:01a16790` |
 
 写入时会自动记录来源 agent：优先用安装器为每个 agent 设置的 `LINGXI_AGENT`，否则根据 MCP 客户端信息识别。
@@ -89,6 +96,12 @@ lingxi sync [--full] [--agent claude-code codex pi]    # 手动同步（查询�
 lingxi sessions [--agent X] [-p [路径]] [--since 7d] [-n 20]
 lingxi show <ref> [--tools] [--from N] [-n 40] [--context 6]
 
+# 跨会话消息
+lingxi who [-a]                                        # 在线会话
+lingxi send <收件人> <内容...> [--kind request] [--ref ...] [--reply-to <id>]   # 以「用户」身份发送；回复时收件人写 -
+lingxi inbox [-a] [--as <标签或会话引用>]                # 看发给你的消息；--as 查看某个会话的收件箱（不标记已读）
+lingxi hook <agent> <event>                            # 钩子入口（Claude Code / Codex 自动调用，一般不用手动运行）
+
 # 后台咨询（产生模型费用）
 lingxi consult <ref> <问题...> [--estimate] [-y] [--model M] [--timeout 180] [--save-topic X]
 
@@ -100,7 +113,7 @@ lingxi timeline [topic] [-p [路径]] [--since 7d] [--until 2026-10-31] [--desc]
                                                        # 不传 topic 时 = 当前目录所属项目的全部工作线
 
 # 接入与卸载
-lingxi install   [claude-code codex pi cursor workbuddy doubao] [--dry-run] [--skill-only] [--mcp-only]
+lingxi install   [claude-code codex pi cursor workbuddy doubao] [--dry-run] [--skill-only] [--mcp-only] [--hooks] [--no-extension]
 lingxi uninstall [targets...] [--dry-run]
 
 # MCP 服务（由各 agent 启动，一般不用手动运行）
@@ -120,6 +133,14 @@ lingxi handoff load --topic XX调研 > research.md       # 导出成文件，可
 
 ---
 
+## 跨会话消息的实现
+
+- **身份**：每个会话在灵犀里有一条在线记录，键是 `<agent>:<会话 ID>`。会话 ID 的来源依次是：环境变量（如 pi 的 `PI_SESSION_ID`）→ pi 扩展或钩子已登记的同目录会话 → 导入的会话记录里同目录、启动时间对得上的最新会话；都拿不到时暂用进程号，拿到后自动切换。
+- **在线**：MCP 服务每 30 秒、pi 扩展每 15 秒刷新一次；2 分钟没刷新算离线（只靠钩子登记的会话是 30 分钟）。
+- **投递**：消息存进数据库，收件人在读取时匹配（直接 / 标签 / 工作线 / 项目 / 广播），按读者分别记录已读。
+- **pi 扩展**：`~/.pi/agent/extensions/lingxi.ts`（一行转发到灵犀的 `dist/integrations/pi-extension.js`）。每 3 秒检查一次：空闲时以自定义消息开始新一轮，忙时作为 follow-up 排队。`LINGXI_PI_AUTOTRIGGER=0` 只排到下一轮、不自动开始；`/lingxi` 命令查看在线会话和未读数。
+- **钩子**（`--hooks`，可选）：Claude Code 写入 `~/.claude/settings.json`，Codex 写入 `~/.codex/hooks.json`，事件为 `SessionStart` 和 `UserPromptSubmit`，输出 `hookSpecificOutput.additionalContext`。
+
 ## 后台咨询的实现
 
 | Agent | 实际执行的命令（问题通过标准输入传入） | 只读与不留痕 |
@@ -136,9 +157,9 @@ lingxi handoff load --topic XX调研 > research.md       # 导出成文件，可
 
 | Agent | MCP 注册位置 | Skill 位置 | 安装方式 |
 |---|---|---|---|
-| Claude Code | `claude mcp add-json --scope user`（写入 `~/.claude.json`） | `~/.claude/skills/lingxi` | 自动 |
-| Codex | `~/.codex/config.toml` → `[mcp_servers.lingxi]` | `~/.agents/skills/lingxi` | 自动 |
-| pi | `~/.pi/agent/mcp.json`（`exposure: direct`） | `~/.agents/skills/lingxi` | 自动 |
+| Claude Code | `claude mcp add-json --scope user`（写入 `~/.claude.json`）；`--hooks` 时另写 `~/.claude/settings.json` | `~/.claude/skills/lingxi` | 自动（钩子可选） |
+| Codex | `~/.codex/config.toml` → `[mcp_servers.lingxi]`；`--hooks` 时另写 `~/.codex/hooks.json` | `~/.agents/skills/lingxi` | 自动（钩子可选，需在 `/hooks` 批准） |
+| pi | `~/.pi/agent/mcp.json`（`exposure: direct`）+ 扩展 `~/.pi/agent/extensions/lingxi.ts` | `~/.agents/skills/lingxi` | 自动（`--no-extension` 不装扩展） |
 | Cursor | `~/.cursor/mcp.json` | `~/.agents/skills/lingxi` | 自动 |
 | WorkBuddy | `~/.workbuddy/mcp.json` | `~/.workbuddy/skills/lingxi` | 自动（首次使用可能需要在应用内批准） |
 | 豆包工作 | 应用内「自定义连接器」 | `~/DoubaoWork/skills/lingxi` | MCP 需手动添加，Skill 自动 |
@@ -172,6 +193,8 @@ lingxi handoff load --topic XX调研 > research.md       # 导出成文件，可
 |---|---|
 | `LINGXI_HOME` | 数据目录，默认 `~/.lingxi`。在执行 `lingxi install` 之前设置，安装器会把它写进各 agent 的配置 |
 | `LINGXI_AGENT` | 写入记录时的来源 agent 名称。安装器会为每个 agent 自动设置；CLI 不设置时记为 `cli` |
+| `LINGXI_PI_AUTOTRIGGER` | pi 扩展：设为 `0` 时收到消息不自动开始新一轮，只排到下一轮 |
+| `LINGXI_PI_POLL_MS` | pi 扩展检查新消息的间隔，默认 3000 毫秒 |
 | `LINGXI_CONSULT_AUTOCONFIRM_TOKENS` | 后台咨询：估算 token 数不超过这个值时，agent 不用再确认就可以直接执行；默认 0（每次都确认） |
 | `LINGXI_INGEST` | 要导入哪些 agent 的会话：逗号分隔（`claude-code,codex,pi,doubao,workbuddy`），`none` 关闭；默认全部 |
 | `LINGXI_DOUBAO_DIR` / `LINGXI_WORKBUDDY_DIR` | 覆盖豆包工作（默认 `%LOCALAPPDATA%/DoubaoWork/User Data/Profile 1/.doubaowork/agent_mode/workspace/.sessions`）和 WorkBuddy（默认 `~/.workbuddy/projects`）的会话目录 |

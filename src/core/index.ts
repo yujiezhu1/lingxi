@@ -6,5 +6,6 @@ export * from "./project.js";
 export * from "./time.js";
 export * from "./sessions.js";
 export * from "./activity.js";
+export * from "./messages.js";
 export { newId, isoLocal, shortDate } from "./ids.js";
 export { SCHEMA_VERSION } from "./db.js";

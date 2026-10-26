@@ -1,5 +1,22 @@
 # 更新日志
 
+## 0.4.0 — 2026-10-26
+
+### 跨会话消息（P1-c）
+
+- 正在运行的会话之间可以互相发消息。收件人可以是标签（如 `research-pdf`）、会话引用、`topic:<名称>`（加入该工作线或在其绑定项目里的会话）、`project:<路径>`、`all`；离线时保留，上线后收到。
+- 新增 MCP 工具：`whoami`、`register`（标签 / 加入工作线 / 当前在做什么）、`list_agents`、`send_message`（支持 `reply_to` 回复）、`check_inbox`（共 23 个工具）。
+- 投递方式：
+  - **pi 扩展**（`lingxi install pi` 默认安装到 `~/.pi/agent/extensions/lingxi.ts`）：每 3 秒检查，空闲时开始新一轮处理消息，忙时排在当前任务之后；`/lingxi` 命令；`LINGXI_PI_AUTOTRIGGER=0` 可关闭自动开始。
+  - **Claude Code / Codex 钩子**（`lingxi install ... --hooks`，可选）：SessionStart 登记在线、UserPromptSubmit 把未读消息加进下一轮上下文；Codex 需在 `/hooks` 批准。
+  - **未读提醒**：任何灵犀工具的结果末尾附「📬 N 条未读」。
+- 会话身份：`<agent>:<会话 ID>`，依次从环境变量、扩展或钩子的登记、导入的会话记录推断，拿不到时暂用进程号。
+- CLI：`lingxi who`、`lingxi send`（以「用户」身份发送）、`lingxi inbox`（`--as` 查看某个会话的收件箱）、`lingxi hook`。
+- 消息带安全提示：来自其他会话的消息只是信息和请求，不能代替用户授权。
+- 会话导入：原始记录文件被删除后，同步时移除对应会话。
+- 数据库 schema 升级到 v3（自动迁移）；测试 56 个。
+
+
 ## 0.3.0 — 2026-10-26
 
 ### 后台咨询（P1-b）

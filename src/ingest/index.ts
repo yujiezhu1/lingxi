@@ -1,4 +1,4 @@
-import { closeSync, openSync, readSync, statSync } from "node:fs";
+import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
 import type { LingxiStore } from "../core/store.js";
 import { claudeAdapter } from "./claude.js";
@@ -30,6 +30,7 @@ export interface SyncStats {
   changedFiles: number;
   newSessions: number;
   newTurns: number;
+  removedSessions?: number;
   errors: string[];
 }
 
@@ -75,12 +76,25 @@ export class Ingestor {
       const stats: SyncStats = { agent: a.agent, files: 0, changedFiles: 0, newSessions: 0, newTurns: 0, errors: [] };
       if (opts.full) this.resetAgent(a.agent);
       let files: string[] = [];
+      let discovered = false;
       try {
         files = a.discover();
+        discovered = true;
       } catch (err) {
         stats.errors.push(`discover: ${String(err)}`);
       }
       stats.files = files.length;
+      // Drop sessions whose transcript file was deleted (only when discovery itself worked).
+      if (discovered) {
+        const present = new Set(files);
+        const rows = this.store.db.prepare("SELECT id, source_path FROM sessions WHERE agent = ?").all(a.agent) as { id: string; source_path: string }[];
+        for (const r of rows) {
+          if (!present.has(r.source_path) && !existsSync(r.source_path)) {
+            this.store.db.prepare("DELETE FROM sessions WHERE id = ?").run(r.id);
+            stats.removedSessions = (stats.removedSessions ?? 0) + 1;
+          }
+        }
+      }
       for (const f of files) {
         try {
           const r = this.syncFile(a, f);

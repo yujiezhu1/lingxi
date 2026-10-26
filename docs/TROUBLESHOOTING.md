@@ -15,7 +15,7 @@
 lingxi status            # 看数据目录和数量
 claude mcp get lingxi    # Claude Code：Status 应为 ✓ Connected
 codex mcp list           # Codex：lingxi 显示 enabled
-pi mcp list              # pi：lingxi: connected, 18 tools
+pi mcp list              # pi：lingxi: connected, 23 tools
 ```
 
 ### agent 里看不到灵犀的工具
@@ -61,6 +61,14 @@ pi mcp list              # pi：lingxi: connected, 18 tools
 - 内置规则会给 `sk-…`、`Bearer …`、`api_key=…`、`密码：…` 这类有标签或固定格式的内容打码，但识别不了没有标签的密码（比如浏览器自动化时直接输入的密码）。
 - 把这些字符串写进 `~/.lingxi/redact.txt`（每行一个，`re:` 开头表示正则），再执行 `lingxi sync --full`。
 - 注意：原始记录仍然在各 agent 自己的目录里，灵犀打码不影响原文件；必要时修改密码。
+
+### 消息发不出去 / 收不到
+
+- `lingxi who` 看对方是否在线、标签是什么；标签写错时会列出在线的标签。
+- 对方离线时消息会保留，等它下次检查（调用灵犀工具或 `check_inbox`）时收到。
+- pi 没有实时收到：确认 `~/.pi/agent/extensions/lingxi.ts` 存在（`lingxi install pi`），然后 `/reload` 或新开会话。
+- Claude Code / Codex 需要开启钩子才会在下一轮自动带上消息：`lingxi install claude-code codex --hooks`；Codex 还要在 `/hooks` 里批准。不开钩子时，调用任意灵犀工具会提示未读，或者说「看看有没有新消息」。
+- 一个会话显示成 `agent (pid …)` 而不是会话引用：说明暂时没识别出会话 ID，发给它的标签仍然有效。
 
 ### 后台咨询失败或超时
 
@@ -108,7 +116,7 @@ pi mcp list              # pi：lingxi: connected, 18 tools
 
 - 核心动作确实类似，总结写得好不好仍然取决于写的那个 agent。
 - 区别在于：不用你来回复制粘贴；内容**持久保存**、可以搜索；多个会话往同一个 topic 里**累积**、多个 agent 都能读；有统一模板、来源引用、作者和时间；新版本替换旧版本，历史保留；桌面端也能直接读写。
-- 手动方式做不到的能力：自动导入会话原文并搜索、活动汇总（v0.2）、向历史会话后台提问（v0.3）；跨会话实时消息（后续版本）。
+- 手动方式做不到的能力：自动导入会话原文并搜索、活动汇总（v0.2）、向历史会话后台提问（v0.3）、正在运行的会话之间实时发消息（v0.4）。
 
 ### 和 CLAUDE.md / AGENTS.md 冲突吗？
 

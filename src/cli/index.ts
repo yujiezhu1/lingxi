@@ -26,6 +26,16 @@ import {
   listSessions,
   readSession,
   searchSessions,
+  MESSAGE_KINDS,
+  fmtInbox,
+  fmtPresenceLine,
+  inboxFor,
+  listPresence,
+  markRead,
+  resolveTarget,
+  sendMessage,
+  upsertPresence,
+  type MessageKind,
   type CardKind,
   type LinkType,
 } from "../core/index.js";
@@ -326,7 +336,7 @@ program
     withStore((s) => {
       const r = new Ingestor(s).sync({ full: o.full, agents: o.agent });
       for (const a of r.agents) {
-        console.log(`${a.agent.padEnd(12)} files ${a.files}  changed ${a.changedFiles}  new sessions ${a.newSessions}  new turns ${a.newTurns}`);
+        console.log(`${a.agent.padEnd(12)} files ${a.files}  changed ${a.changedFiles}  new sessions ${a.newSessions}  new turns ${a.newTurns}${a.removedSessions ? `  removed ${a.removedSessions}` : ""}`);
         for (const e of a.errors.slice(0, 5)) console.log(`  ! ${e}`);
       }
       console.log(`done in ${r.ms} ms`);
@@ -377,6 +387,72 @@ program
       console.log(fmtActivity(activityReport(s, { ...range, project: projectArg(o.project), git: o.git })));
     }),
   );
+
+// ── messaging ──
+/** The human at the terminal, as a message participant. */
+function terminalUser(s: LingxiStore) {
+  return upsertPresence(s.db, { key: "user:terminal", agent: "user", session_native: "terminal", cwd: process.cwd(), via: "cli", label: "user" });
+}
+
+program
+  .command("who")
+  .description("List online agent sessions (possible message recipients)")
+  .option("-a, --all", "include sessions seen earlier")
+  .action((o: { all?: boolean }) =>
+    withStore((s) => {
+      const list = listPresence(s.db, { all: o.all }).filter((p) => p.agent !== "user");
+      console.log(list.length ? list.map((p) => fmtPresenceLine(p)).join("\n") : "No agent sessions online.");
+    }),
+  );
+
+program
+  .command("send <to> <body...>")
+  .description("Send a message to a session: label | session ref | topic:<name> | project:<path> | all (sender: user)")
+  .addOption(new Option("--kind <kind>").choices([...MESSAGE_KINDS]))
+  .option("--ref <ref>", "reference (repeatable)", collect)
+  .option("--reply-to <id>", "reply to a message (use '-' as <to>)")
+  .action((to: string, body: string[], o: { kind?: MessageKind; ref?: string[]; replyTo?: string }) =>
+    withStore((s) => {
+      const me = terminalUser(s);
+      const { message, target } = sendMessage(s.db, me, to === "-" ? "" : to, body.join(" "), { kind: o.kind, refs: o.ref, reply_to: o.replyTo });
+      const live = target.liveRecipients.map((p) => p.label ?? p.key);
+      console.log(`Sent ${message.id} to ${target.describe}.${live.length ? ` Online now: ${live.join(", ")}.` : ""}`);
+    }),
+  );
+
+program
+  .command("inbox")
+  .description("Show messages sent to you (label 'user'), or peek at a session's inbox with --as")
+  .option("--as <who>", "label or session ref of the session to inspect (does not mark as read)")
+  .option("-a, --all", "include already read messages")
+  .action((o: { as?: string; all?: boolean }) =>
+    withStore((s) => {
+      let me = terminalUser(s);
+      if (o.as) {
+        const t = resolveTarget(s.db, o.as, null);
+        const p =
+          t.kind === "label"
+            ? listPresence(s.db, { all: true }).find((x) => x.label === t.value)
+            : t.kind === "session"
+              ? listPresence(s.db, { all: true }).find((x) => x.session_native === t.value)
+              : undefined;
+        if (!p) throw new LingxiError(`No registered session for ${o.as}`);
+        me = p;
+      }
+      const msgs = inboxFor(s.db, me, { includeRead: o.all });
+      if (!o.as) markRead(s.db, me.key, msgs.map((m) => m.id));
+      console.log(fmtInbox(msgs));
+    }),
+  );
+
+// ── hook (Claude Code / Codex) ──
+program
+  .command("hook <agent> <event>")
+  .description("Hook entry point for Claude Code / Codex: registers presence and injects unread messages (reads hook JSON on stdin)")
+  .action(async (agentName: string, event: string) => {
+    const { runHook } = await import("../integrations/hooks.js");
+    process.stdout.write(runHook(agentName, event, readStdin()));
+  });
 
 // ── consult ──
 program
@@ -429,9 +505,11 @@ program
   .option("--dry-run", "show what would change without writing")
   .option("--skill-only", "only install the skill files")
   .option("--mcp-only", "only register the MCP server")
-  .action(async (targets: string[], o: { dryRun?: boolean; skillOnly?: boolean; mcpOnly?: boolean }) => {
+  .option("--hooks", "Claude Code / Codex: also add SessionStart + UserPromptSubmit hooks that deliver Lingxi messages")
+  .option("--no-extension", "pi: do not install the real-time messaging extension")
+  .action(async (targets: string[], o: { dryRun?: boolean; skillOnly?: boolean; mcpOnly?: boolean; hooks?: boolean; extension?: boolean }) => {
     const { runInstall } = await import("../install/index.js");
-    await runInstall(targets, { dryRun: !!o.dryRun, skill: !o.mcpOnly, mcp: !o.skillOnly });
+    await runInstall(targets, { dryRun: !!o.dryRun, skill: !o.mcpOnly, mcp: !o.skillOnly, hooks: !!o.hooks, extension: o.extension });
   });
 program
   .command("uninstall [targets...]")

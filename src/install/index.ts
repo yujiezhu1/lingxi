@@ -11,6 +11,10 @@ export interface InstallOptions {
   dryRun: boolean;
   skill: boolean;
   mcp: boolean;
+  /** Claude Code / Codex: add SessionStart + UserPromptSubmit hooks for message delivery (opt-in). */
+  hooks?: boolean;
+  /** pi: install the real-time messaging extension (default true). */
+  extension?: boolean;
 }
 
 export interface LaunchSpec {
@@ -168,6 +172,78 @@ function upsertClaude(spec: LaunchSpec | null, dry: boolean): void {
   upsertJsonServer(join(H, ".claude.json"), spec ? { type: "stdio", ...spec } : null, dry);
 }
 
+// ── pi extension (real-time message delivery) ──
+
+const PI_EXTENSION = join(H, ".pi", "agent", "extensions", "lingxi.ts");
+
+export function piExtensionShim(): string {
+  const target = fileURLToPath(new URL("../integrations/pi-extension.js", import.meta.url)).replace(/\\/g, "/");
+  return `// Installed by \`lingxi install pi\` — delivers Lingxi messages from other sessions into this pi session.\n// Remove with \`lingxi uninstall pi\`.\nexport { default } from ${JSON.stringify(target)};\n`;
+}
+
+function installPiExtension(dry: boolean): void {
+  if (!dry) {
+    mkdirSync(dirname(PI_EXTENSION), { recursive: true });
+    writeFileSync(PI_EXTENSION, piExtensionShim(), "utf8");
+  }
+  log(dry, `  extension → ${PI_EXTENSION} (real-time messages; /reload or new session to activate)`);
+}
+
+function removePiExtension(dry: boolean): void {
+  if (!existsSync(PI_EXTENSION)) return;
+  if (!dry) rmSync(PI_EXTENSION, { force: true });
+  log(dry, `  extension removed: ${PI_EXTENSION}`);
+}
+
+// ── Claude Code / Codex hooks (opt-in) ──
+
+const HOOK_EVENTS = ["SessionStart", "UserPromptSubmit"] as const;
+const HOOK_MARKER = "lingxi-hook";
+
+/** PowerShell on Windows (both Claude Code with shell=powershell and Codex run hook commands through it). */
+export function hookCommand(agent: "claude-code" | "codex", event: string): string {
+  const spec = launchSpec(agent);
+  const cli = spec.args[0]!;
+  return process.platform === "win32"
+    ? `& "${spec.command}" "${cli}" hook ${agent} ${event} # ${HOOK_MARKER}`
+    : `"${spec.command}" "${cli}" hook ${agent} ${event} # ${HOOK_MARKER}`;
+}
+
+type HookEntry = { matcher?: string; hooks: Record<string, unknown>[] };
+
+export function mergeHooks(config: Record<string, unknown>, entries: Record<string, Record<string, unknown> | null>): Record<string, unknown> {
+  const cfg = JSON.parse(JSON.stringify(config)) as Record<string, unknown>; // never mutate the caller's object
+  const hooks = (cfg.hooks as Record<string, HookEntry[]> | undefined) ?? {};
+  for (const [event, hook] of Object.entries(entries)) {
+    const list = (hooks[event] ?? [])
+      .map((e) => ({ ...e, hooks: (e.hooks ?? []).filter((h) => !String(h.command ?? "").includes(HOOK_MARKER)) }))
+      .filter((e) => e.hooks.length > 0);
+    if (hook) list.push({ matcher: "", hooks: [hook] });
+    if (list.length) hooks[event] = list;
+    else delete hooks[event];
+  }
+  return { ...cfg, hooks };
+}
+
+function upsertHooks(agent: "claude-code" | "codex", install: boolean, dry: boolean): void {
+  const file = agent === "claude-code" ? join(H, ".claude", "settings.json") : join(H, ".codex", "hooks.json");
+  const entries: Record<string, Record<string, unknown> | null> = {};
+  for (const ev of HOOK_EVENTS) {
+    entries[ev] = install
+      ? agent === "claude-code"
+        ? { type: "command", command: hookCommand(agent, ev), ...(process.platform === "win32" ? { shell: "powershell" } : {}), timeout: 15 }
+        : { type: "command", command: hookCommand(agent, ev), timeout: 15 }
+      : null;
+  }
+  const before = readJson(file);
+  const next = mergeHooks(before, entries);
+  if (JSON.stringify(before) === JSON.stringify(next)) return log(dry, `  hooks: no change in ${file}`);
+  backup(file, dry);
+  if (!dry) writeAtomic(file, JSON.stringify(next, null, 2) + "\n");
+  log(dry, `  hooks ${install ? "added to" : "removed from"} ${file} (${HOOK_EVENTS.join(", ")})`);
+  if (install && agent === "codex") log(dry, "  ⚠ Codex: open codex and run /hooks to approve the new hooks (they stay inactive until approved)");
+}
+
 // ── Skills ──
 
 function installSkill(dir: string, dry: boolean): void {
@@ -224,9 +300,11 @@ export async function runInstall(input: string[], opts: InstallOptions): Promise
         switch (t) {
           case "claude-code":
             upsertClaude(spec, opts.dryRun);
+            if (opts.hooks) upsertHooks("claude-code", true, opts.dryRun);
             break;
           case "codex":
             upsertCodex(spec, opts.dryRun);
+            if (opts.hooks) upsertHooks("codex", true, opts.dryRun);
             break;
           case "pi":
             upsertJsonServer(
@@ -234,6 +312,7 @@ export async function runInstall(input: string[], opts: InstallOptions): Promise
               { command: spec.command, args: spec.args, env: spec.env, description: SERVER_DESCRIPTION, exposure: "direct", timeout: 600 },
               opts.dryRun,
             );
+            if (opts.extension !== false) installPiExtension(opts.dryRun);
             break;
           case "cursor":
             upsertJsonServer(join(H, ".cursor", "mcp.json"), { command: spec.command, args: spec.args, env: spec.env }, opts.dryRun);
@@ -277,12 +356,15 @@ export async function runUninstall(input: string[], opts: { dryRun: boolean }): 
       switch (t) {
         case "claude-code":
           upsertClaude(null, opts.dryRun);
+          upsertHooks("claude-code", false, opts.dryRun);
           break;
         case "codex":
           upsertCodex(null, opts.dryRun);
+          upsertHooks("codex", false, opts.dryRun);
           break;
         case "pi":
           upsertJsonServer(join(H, ".pi", "agent", "mcp.json"), null, opts.dryRun);
+          removePiExtension(opts.dryRun);
           break;
         case "cursor":
           upsertJsonServer(join(H, ".cursor", "mcp.json"), null, opts.dryRun);
