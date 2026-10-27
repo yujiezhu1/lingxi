@@ -49,6 +49,13 @@ describe("presence", () => {
     expect(setLabel(store.db, "codex:b2", "dev-shop").label).toBe("dev-shop");
   });
 
+  it("hides an unidentified pid entry when an identified session works in the same directory", () => {
+    upsertPresence(store.db, { key: "codex#pid1", agent: "codex", session_native: null, cwd: "D:/proj/x", via: "mcp" });
+    expect(listPresence(store.db).map((p) => p.key)).toEqual(["codex#pid1"]);
+    upsertPresence(store.db, { key: "codex:s1", agent: "codex", session_native: "s1", cwd: "D:\\proj\\x", via: "hook" });
+    expect(listPresence(store.db).map((p) => p.key)).toEqual(["codex:s1"]);
+  });
+
   it("filters out stale sessions; hook sessions stay online longer", () => {
     P("pi:x", "pi", "x", "D:/a");
     store.db.prepare("UPDATE presence SET last_seen = ? WHERE key = 'pi:x'").run(Date.now() - 5 * 60_000);
@@ -166,6 +173,21 @@ describe("MCP identity", () => {
       expect(id.current().key).toBe("pi:sess-9");
     } finally {
       if (saved !== undefined) process.env.PI_SESSION_ID = saved;
+    }
+  });
+
+  it("switches to a newer session registered in the same directory (one MCP server serving several sessions)", () => {
+    const saved = process.env.CODEX_THREAD_ID;
+    delete process.env.CODEX_THREAD_ID;
+    try {
+      const id = new SessionIdentity(store.db, () => "codex", "D:/proj/c");
+      upsertPresence(store.db, { key: "codex:t1", agent: "codex", session_native: "t1", cwd: "D:/proj/c", via: "hook" });
+      expect(id.current().key).toBe("codex:t1");
+      upsertPresence(store.db, { key: "codex:t2", agent: "codex", session_native: "t2", cwd: "D:/proj/c", via: "hook" });
+      store.db.prepare("UPDATE presence SET last_seen = last_seen + 1000 WHERE key = 'codex:t2'").run();
+      expect(id.current().key).toBe("codex:t2");
+    } finally {
+      if (saved !== undefined) process.env.CODEX_THREAD_ID = saved;
     }
   });
 

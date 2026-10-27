@@ -79,10 +79,15 @@ export class SessionIdentity {
   /** Current presence (registers / refreshes it). Cheap enough to call on every tool call. */
   current(): Presence {
     const agent = this.agentName();
-    if (!this.native) {
-      const since = this.started - 2 * 60_000;
-      this.native = sessionIdFromEnv(agent) ?? guessSessionFromPresence(this.db, agent, this.cwd, since);
-      if (!this.native) {
+    const since = this.started - 2 * 60_000;
+    const fromEnv = sessionIdFromEnv(agent);
+    if (fromEnv) this.native = fromEnv;
+    else {
+      // Re-check every call: some apps (e.g. Codex Desktop) keep one MCP server across several sessions,
+      // so the newest session registered by a hook / extension in this directory wins.
+      const adopted = guessSessionFromPresence(this.db, agent, this.cwd, since);
+      if (adopted) this.native = adopted;
+      else if (!this.native) {
         try {
           this.beforeGuess?.();
         } catch {
@@ -109,7 +114,9 @@ export class SessionIdentity {
     if (this.timer) return;
     this.timer = setInterval(() => {
       try {
-        if (getPresence(this.db, this.key)) touchPresence(this.db, this.key);
+        // Unidentified (pid-keyed) rows are only kept alive by real tool calls, not by the heartbeat,
+        // so an idle MCP server does not show up as a phantom session.
+        if (this.native && getPresence(this.db, this.key)) touchPresence(this.db, this.key);
       } catch {
         /* db closed */
       }

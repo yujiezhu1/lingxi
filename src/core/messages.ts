@@ -77,7 +77,13 @@ export function isOnline(p: Presence, now = Date.now()): boolean {
 
 export function listPresence(db: DatabaseSync, opts: { all?: boolean } = {}): Presence[] {
   const rows = (db.prepare("SELECT * FROM presence ORDER BY last_seen DESC").all() as Row[]).map(toPresence);
-  return opts.all ? rows : rows.filter((p) => isOnline(p));
+  const list = opts.all ? rows : rows.filter((p) => isOnline(p));
+  // Hide an unidentified (pid-keyed) entry when an identified session of the same agent works in the same directory.
+  return list.filter(
+    (p) =>
+      p.session_native ||
+      !list.some((q) => q !== p && q.session_native && q.agent === p.agent && q.cwd && p.cwd && normalizeProjectPath(q.cwd) === normalizeProjectPath(p.cwd)),
+  );
 }
 
 /** Pick a label that no *other* live session uses (suffix -2, -3 …). */
