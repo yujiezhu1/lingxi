@@ -498,6 +498,31 @@ program
     }
   });
 
+// ── ui ──
+program
+  .command("ui")
+  .description("Open the Lingxi web UI (local only, http://127.0.0.1)")
+  .option("-p, --port <port>", "port (default: a free port)", (v) => parseInt(v, 10))
+  .option("--no-open", "do not open the browser")
+  .action(async (o: { port?: number; open?: boolean }) => {
+    const { startUiServer } = await import("../ui/server.js");
+    const ui = await startUiServer({ port: o.port });
+    console.log(`灵犀 Lingxi UI: ${ui.url}`);
+    console.log("Press Ctrl+C to stop.");
+    if (o.open !== false) {
+      const { spawn } = await import("node:child_process");
+      const [cmd, args] =
+        process.platform === "win32" ? ["cmd", ["/c", "start", "", ui.url]] : process.platform === "darwin" ? ["open", [ui.url]] : ["xdg-open", [ui.url]];
+      spawn(cmd as string, args as string[], { detached: true, stdio: "ignore", windowsHide: true }).unref();
+    }
+    const stop = async () => {
+      await ui.close();
+      process.exit(0);
+    };
+    process.on("SIGINT", stop);
+    process.on("SIGTERM", stop);
+  });
+
 // ── install ──
 program
   .command("install [targets...]")

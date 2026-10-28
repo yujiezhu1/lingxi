@@ -38,6 +38,12 @@ pi mcp list              # pi：lingxi: connected, 23 tools
 
 ## 使用中的问题
 
+### 图形界面打不开 / 显示「缺少访问令牌」
+
+- 必须用 `lingxi ui` 打印的链接打开（带 `?token=`）；直接访问地址没有令牌。每次重启 `lingxi ui`，令牌都会变。
+- 显示「Lingxi UI is not built」：在项目目录运行 `npm run build`（会同时构建前端）。
+- 左下角显示「未连接」：页面不会自动刷新，通常是 `lingxi ui` 已经停止，重新运行即可。
+
 ### agent 没有主动用灵犀
 
 - 在话里带上「灵犀」两个字，例如「加载灵犀里的 XX」。
