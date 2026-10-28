@@ -1,6 +1,8 @@
+import { FileText } from "lucide-react";
 import { useApi } from "../api";
+import { SearchTrigger } from "../palette";
 import { href } from "../router";
-import { AgentTag, Empty, ErrorBox, KindTag, Loading, SessionLink, Snippet, fmtTime } from "../ui";
+import { AgentPill, Empty, ErrorBox, KindTag, Loading, PageHeader, Panel, Snippet, fmtTime, sessionHref, topicHref } from "../ui";
 
 interface NoteHit {
   doc_type: "handoff" | "card";
@@ -23,75 +25,67 @@ interface SessionHit {
 }
 
 export function Search({ q, scope }: { q: string; scope: string }) {
-  const { data, error, loading } = useApi<{ notes: NoteHit[]; sessions: SessionHit[] }>(
-    q ? `search?q=${encodeURIComponent(q)}&scope=${scope}&limit=30` : null,
-    { live: false },
-  );
-  if (!q) return <Empty>在顶部输入关键词搜索</Empty>;
+  const { data, error } = useApi<{ notes: NoteHit[]; sessions: SessionHit[] }>(q ? `search?q=${encodeURIComponent(q)}&scope=${scope}&limit=40` : null, { live: false });
   return (
     <div className="page">
-      <h1>搜索：{q}</h1>
-      <div className="toolbar">
-        {[
-          ["all", "全部"],
-          ["notes", "交接包和卡片"],
-          ["sessions", "会话原文"],
-        ].map(([k, l]) => (
-          <a key={k} className={`chip ${scope === k ? "on" : ""}`} href={href("/search", { q, scope: k })}>
-            {l}
-          </a>
-        ))}
-      </div>
-      <p className="muted small">多个关键词之间是「且」的关系；会话原文默认只搜对话（不含工具输出）。</p>
-      {error && <ErrorBox error={error} />}
-      {loading && !data && <Loading />}
-      {data && (
+      <PageHeader title={q ? `「${q}」` : "搜索"} sub={q ? "的搜索结果" : undefined} actions={<SearchTrigger />} />
+      {!q && <Empty title="按 Ctrl K 开始搜索">可以搜交接包、知识卡片和五家 agent 的会话原文。</Empty>}
+      {q && (
         <>
-          {scope !== "sessions" && (
-            <section>
-              <h2>交接包和卡片（{data.notes.length}）</h2>
-              {data.notes.length === 0 && <Empty>没有结果</Empty>}
-              <ul className="list results">
-                {data.notes.map((h) => (
-                  <li key={h.doc_id}>
-                    <div className="row">
-                      {h.doc_type === "handoff" ? <span className="kind-tag k-handoff">交接包</span> : <KindTag kind={h.title.replace(/[[\]]/g, "")} />}
-                      {h.topic_id ? (
-                        <a href={href(`/topics/${encodeURIComponent(h.topic_id)}`)}>
-                          <b>{h.doc_type === "handoff" ? h.title : h.topic}</b>
-                        </a>
-                      ) : (
-                        <b>{h.title}</b>
-                      )}
-                      {h.topic && h.doc_type === "handoff" && <span className="pill">{h.topic}</span>}
-                      <span className="muted right small">{fmtTime(h.created_at)}</span>
-                    </div>
-                    <Snippet text={h.snippet} />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-          {scope !== "notes" && (
-            <section>
-              <h2>会话原文（{data.sessions.length}）</h2>
-              {data.sessions.length === 0 && <Empty>没有结果</Empty>}
-              <ul className="list results">
-                {data.sessions.map((h) => (
-                  <li key={`${h.session_id}-${h.seq}`}>
-                    <div className="row">
-                      <AgentTag agent={h.agent} />
-                      <SessionLink id={h.session_id} seq={h.seq}>
-                        <b>{h.title || "（无标题）"}</b>
-                      </SessionLink>
-                      <span className="muted small mono">{h.ref}</span>
-                      <span className="muted right small">{fmtTime(h.ts)}</span>
-                    </div>
-                    <Snippet text={h.snippet} />
-                  </li>
-                ))}
-              </ul>
-            </section>
+          <div className="toolbar">
+            <div className="seg">
+              {[
+                ["all", "全部"],
+                ["notes", "交接包与卡片"],
+                ["sessions", "会话原文"],
+              ].map(([k, l]) => (
+                <a key={k} className={scope === k ? "on" : ""} href={href("/search", { q, scope: k })}>
+                  {l}
+                </a>
+              ))}
+            </div>
+            <span className="faint xs">多个词之间是「且」；会话原文默认不含工具输出。</span>
+          </div>
+          {error && <ErrorBox error={error} />}
+          {!data && <Loading />}
+          {data && (
+            <div className="cols cols-main-side">
+              {scope !== "notes" && (
+                <Panel title="会话原文" sub={`${data.sessions.length} 条`}>
+                  {data.sessions.length === 0 && <Empty>会话里没有找到</Empty>}
+                  {data.sessions.map((h) => (
+                    <a key={`${h.session_id}-${h.seq}`} className="hit" href={sessionHref(h.session_id, h.seq)}>
+                      <div className="hit-h">
+                        <AgentPill agent={h.agent} />
+                        <b className="ellipsis" style={{ maxWidth: 420 }}>{h.title || "（无标题）"}</b>
+                        <span className="mono faint">#{h.seq}</span>
+                        <span className="faint xs" style={{ marginLeft: "auto" }}>{fmtTime(h.ts)}</span>
+                      </div>
+                      <div className="hit-snippet"><Snippet text={h.snippet} /></div>
+                    </a>
+                  ))}
+                </Panel>
+              )}
+              {scope !== "sessions" && (
+                <Panel title="交接包与卡片" sub={`${data.notes.length} 条`}>
+                  {data.notes.length === 0 && <Empty>交接包和卡片里没有找到</Empty>}
+                  {data.notes.map((h) => (
+                    <a key={h.doc_id} className="hit" href={h.topic_id ? topicHref(h.topic_id) : "#/topics"}>
+                      <div className="hit-h">
+                        {h.doc_type === "handoff" ? (
+                          <span className="ktag k k-handoff"><FileText size={12} />交接包</span>
+                        ) : (
+                          <KindTag kind={h.title.replace(/[[\]]/g, "")} />
+                        )}
+                        <b className="serif">{h.doc_type === "handoff" ? h.title : h.topic}</b>
+                        <span className="faint xs" style={{ marginLeft: "auto" }}>{fmtTime(h.created_at)}</span>
+                      </div>
+                      <div className="hit-snippet"><Snippet text={h.snippet} /></div>
+                    </a>
+                  ))}
+                </Panel>
+              )}
+            </div>
           )}
         </>
       )}

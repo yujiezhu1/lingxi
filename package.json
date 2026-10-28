@@ -1,6 +1,6 @@
 {
   "name": "lingxi-hub",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "灵犀 Lingxi — local-first context hub that lets different AI agents and sessions share handoffs, topics and knowledge.",
   "type": "module",
   "license": "UNLICENSED",
@@ -48,6 +48,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "dompurify": "^3.4.17",
+    "lucide-react": "^1.63.0",
     "marked": "^18.1.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

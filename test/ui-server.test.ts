@@ -65,6 +65,9 @@ describe("UI server", () => {
     const act = (await (await get("/api/activity?date=today&git=0")).json()) as { markdown: string };
     expect(act.markdown).toContain("导出需求");
     expect((await get("/api/sessions/nope")).status).toBe(404);
+    const weave = (await (await get("/api/weave?date=today")).json()) as { knots: { agent: string; type: string }[] };
+    expect(weave.knots.map((k) => [k.agent, k.type])).toEqual([["doubao", "handoff"]]);
+    expect(Array.isArray(await (await get("/api/projects?since=14d")).json())).toBe(true);
   });
 
   it("protects state-changing requests (header token + same origin) and sends messages as the user", async () => {

@@ -71,11 +71,11 @@ Lingxi is a **local context hub shared by all your agents**. Handoffs, knowledge
 - 📨 **Message between live sessions** — running sessions can message each other: pi receives and acts in real time, Claude Code / Codex get messages on their next turn — no human courier.
 - 💬 **Ask a past session** — a read-only, non-persisted copy of a past Claude Code / Codex / pi session answers with its full context, without switching tools or disturbing the original (costs tokens; confirmation required by default).
 - 📝 **Activity reports** — one sentence summarizes today / this week across agents: what you asked, what got committed, and what is still uncommitted.
-- 🖥️ **Web UI** — `lingxi ui` opens a local page to browse today's activity, topics, transcripts, messages and reports, with live refresh.
+- 🖥️ **Web UI** — `lingxi ui` opens a local page. The "loom" on the home page draws every agent's sessions, saved notes and cross-agent messages of the day on one timeline; browse topics, transcripts, messages and reports, search anywhere with Ctrl K, live refresh.
 - 🔒 **Local only** — data lives in `~/.lingxi/`; no network access, no external model calls. Thinking traces are not imported; common secret formats are masked.
 - 🧩 **Vendor-neutral** — built on MCP and Agent Skills; supports Claude Code, Codex, pi, Cursor, WorkBuddy and Doubao Work, and new agents only need an adapter.
 
-**Current version: v0.5.0** (see the [roadmap](#roadmap)).
+**Current version: v0.6.0** (see the [roadmap](#roadmap)).
 
 ---
 
@@ -179,6 +179,7 @@ Detailed docs are currently in Chinese:
 | P1-b Background consultation | Ask a read-only, non-persisted copy of a past session; size estimate + confirmation | ✅ v0.3.0 |
 | P1-c Cross-session messaging | Presence, inbox, real-time delivery via a pi extension, Claude Code / Codex hooks, unread notices | ✅ v0.4.0 |
 | P3-a Web UI | `lingxi ui`: today, topics, sessions, unified search, messages, reports, status (read-mostly) | ✅ v0.5.0 |
+| P3-b UI redesign | Celadon-and-ink design system, the loom timeline, three-column topic reader, Ctrl K palette | ✅ v0.6.0 |
 | P2 | Cursor transcripts, presence detection, better CJK search | Planned |
 | P3 | Background service (HTTP MCP, message delivery), local web UI | Planned |
 | P4 | Remote agents, multi-device sync, team sharing | Planned |

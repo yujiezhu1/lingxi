@@ -142,3 +142,27 @@ export interface ActivityReport {
   projects: ActivityProject[];
   otherNotes: ActivityProject["notes"];
 }
+
+export interface WeaveSession {
+  id: string;
+  title: string | null;
+  segments: [number, number][];
+  turns: number;
+}
+export interface WeaveData {
+  since: number;
+  until: number;
+  lanes: { agent: string; sessions: WeaveSession[] }[];
+  knots: { ts: number; agent: string; type: "handoff" | "card"; kind: string | null; text: string; topic: string | null; topic_id: string | null; id: string }[];
+  links: { ts: number; id: string; from_agent: string; to_agent: string; from_label: string | null; to_label: string | null; body: string }[];
+}
+export interface ProjectSummary {
+  root: string;
+  name: string;
+  isGit: boolean;
+  branch: string | null;
+  dirty: number;
+  agents: string[];
+  sessions: number;
+  last: number;
+}

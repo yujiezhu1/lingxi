@@ -2,3 +2,7 @@ node_modules/
 dist/
 *.log
 .lingxi-test*/
+
+# Binary design assets stay local (corporate upload filters block images); regenerate with design/concepts/jobs.json
+design/concepts/*.webp
+design/assets/*.webp

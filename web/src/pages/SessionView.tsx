@@ -1,23 +1,39 @@
+import { ArrowLeft, Copy, Wrench } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { href } from "../router";
 import type { SessionInfo, Turn } from "../types";
-import { AgentTag, ErrorBox, Loading, Markdown, copyText, fmtTime } from "../ui";
+import { AgentPill, ErrorBox, Loading, Markdown, PageHeader, agentName, copyText, fmtTime } from "../ui";
 
-const PAGE = 300;
+const PAGE = 400;
+
+type Block = { kind: "turn"; turn: Turn } | { kind: "tools"; turns: Turn[] };
+
+/** Consecutive tool calls / outputs are folded into one quiet block between messages. */
+function toBlocks(turns: Turn[]): Block[] {
+  const out: Block[] = [];
+  for (const t of turns) {
+    if (t.role === "tool_call" || t.role === "tool_result") {
+      const last = out[out.length - 1];
+      if (last?.kind === "tools") last.turns.push(t);
+      else out.push({ kind: "tools", turns: [t] });
+    } else out.push({ kind: "turn", turn: t });
+  }
+  return out;
+}
 
 export function SessionView({ id, seq }: { id: string; seq?: number }) {
-  const [tools, setTools] = useState(!!seq);
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [more, setMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
   const target = useRef<HTMLDivElement | null>(null);
 
   const load = (from: number, append: boolean) => {
     setLoading(true);
-    api<{ session: SessionInfo; turns: Turn[] }>(`sessions/${encodeURIComponent(id)}?from=${from}&limit=${PAGE}&tools=${tools ? 1 : 0}`)
+    api<{ session: SessionInfo; turns: Turn[] }>(`sessions/${encodeURIComponent(id)}?from=${from}&limit=${PAGE}&tools=1`)
       .then((r) => {
         setSession(r.session);
         setTurns((t) => (append ? [...t, ...r.turns] : r.turns));
@@ -28,74 +44,102 @@ export function SessionView({ id, seq }: { id: string; seq?: number }) {
       .finally(() => setLoading(false));
   };
 
-  // Jump near #seq: start a bit before it.
   useEffect(() => {
-    load(seq ? Math.max(1, seq - 20) : 1, false);
+    load(seq ? Math.max(1, seq - 30) : 1, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, tools]);
-
+  }, [id]);
   useEffect(() => {
     if (seq && target.current) target.current.scrollIntoView({ block: "center" });
   }, [turns, seq]);
 
-  if (error && !session) return <ErrorBox error={error} />;
+  if (error && !session) return <div className="page"><ErrorBox error={error} /></div>;
   if (!session) return <Loading />;
+  const blocks = toBlocks(turns);
 
   return (
-    <div className="page session-page">
-      <a className="muted small" href={href("/sessions")}>
-        ← 返回会话列表
+    <div className="page reader">
+      <a className="small" href={href("/sessions")} style={{ display: "inline-flex", gap: 6, alignItems: "center", marginBottom: 10 }}>
+        <ArrowLeft size={14} /> 会话列表
       </a>
-      <div className="detail-head">
-        <h1>{session.title || "（无标题）"}</h1>
-        <div className="muted small">
-          <AgentTag agent={session.agent} /> <span className="mono">{session.ref}</span> · {session.turn_count} 条 · {fmtTime(session.started_at)} →{" "}
-          {fmtTime(session.updated_at)}
-        </div>
-        <div className="muted small mono">{session.cwd}</div>
+      <PageHeader
+        title={session.title && session.title.length < 40 ? session.title : "会话记录"}
+        actions={
+          <button
+            className="btn"
+            onClick={() =>
+              copyText(session.ref).then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1400);
+              })
+            }
+          >
+            <Copy size={14} /> {copied ? "已复制" : "复制会话引用"}
+          </button>
+        }
+      />
+      {session.title && session.title.length >= 40 && <p className="muted" style={{ marginTop: -10 }}>{session.title}</p>}
+      <div className="topic-meta">
+        <AgentPill agent={session.agent} />
+        <span className="mono">{session.ref}</span>
+        <span>{session.turn_count} 条</span>
+        <span>
+          {fmtTime(session.started_at)} → {fmtTime(session.updated_at)}
+        </span>
+        {session.cwd && <span className="mono">{session.cwd}</span>}
       </div>
-      <div className="toolbar">
-        <label className="check">
-          <input type="checkbox" checked={tools} onChange={(e) => setTools(e.target.checked)} /> 显示工具调用和输出
-        </label>
-        <span className="spacer" />
-        <button className="btn ghost" onClick={() => copyText(session.ref)}>
-          复制会话引用
-        </button>
-      </div>
-      {seq && seq > 21 && (
-        <button className="btn ghost" onClick={() => load(1, false)}>
-          ↑ 从头开始显示
+      {seq && seq > 31 && turns[0] && turns[0].seq > 1 && (
+        <button className="btn quiet" onClick={() => load(1, false)}>
+          ↑ 从第一条开始看
         </button>
       )}
-      <div className="transcript">
-        {turns.map((t) => (
-          <div key={t.seq} ref={t.seq === seq ? target : undefined} className={`turn turn-${t.role} ${t.seq === seq ? "turn-target" : ""}`}>
-            <div className="turn-meta">
-              <span className="turn-seq">#{t.seq}</span>
-              <span>{ROLE[t.role]}</span>
-              {t.tool_name && <span className="mono">{t.tool_name}</span>}
-              <span className="muted">{fmtTime(t.ts)}</span>
+      <section className="panel" style={{ padding: "6px 24px" }}>
+        {blocks.map((b, i) =>
+          b.kind === "tools" ? (
+            <ToolBlock key={`t${i}`} turns={b.turns} open={!!seq && b.turns.some((t) => t.seq === seq)} targetRef={target} seq={seq} />
+          ) : (
+            <div key={b.turn.seq} ref={b.turn.seq === seq ? target : undefined} className={`turn ${b.turn.role} ${b.turn.seq === seq ? "target" : ""}`}>
+              <div className="turn-side">
+                #{b.turn.seq}
+                <br />
+                {fmtTime(b.turn.ts, false)}
+              </div>
+              <div>
+                <div className="turn-who">
+                  <b>{b.turn.role === "user" ? "你" : agentName(session.agent)}</b>
+                </div>
+                <Markdown text={b.turn.text} compact />
+              </div>
             </div>
-            {t.role === "user" || t.role === "assistant" ? (
-              <Markdown text={t.text} />
-            ) : (
-              <details>
-                <summary className="mono small tool-summary">{t.text.slice(0, 240)}</summary>
-                <pre className="tool-pre">{t.text}</pre>
-              </details>
-            )}
-          </div>
-        ))}
-      </div>
-      {loading && <Loading />}
+          ),
+        )}
+        {loading && <Loading />}
+      </section>
       {more && !loading && (
-        <button className="btn" onClick={() => load((turns[turns.length - 1]?.seq ?? 0) + 1, true)}>
-          加载更多
+        <button className="btn" style={{ marginTop: 12 }} onClick={() => load((turns[turns.length - 1]?.seq ?? 0) + 1, true)}>
+          继续加载
         </button>
       )}
     </div>
   );
 }
 
-const ROLE: Record<Turn["role"], string> = { user: "🧑 用户", assistant: "🤖 助手", tool_call: "🔧 工具调用", tool_result: "📤 工具输出" };
+function ToolBlock({ turns, open, targetRef, seq }: { turns: Turn[]; open: boolean; targetRef: React.MutableRefObject<HTMLDivElement | null>; seq?: number }) {
+  const calls = turns.filter((t) => t.role === "tool_call");
+  const names = [...new Set(calls.map((c) => c.tool_name).filter(Boolean))].slice(0, 4).join("、");
+  return (
+    <div className="turn" style={{ padding: "6px 0" }}>
+      <div className="turn-side">#{turns[0]!.seq}</div>
+      <details className="tools" open={open}>
+        <summary>
+          <Wrench size={13} /> {calls.length || turns.length} 次工具调用{names && ` · ${names}`}
+        </summary>
+        {turns.map((t) => (
+          <div key={t.seq} className="tool-item" ref={t.seq === seq ? targetRef : undefined}>
+            <span className="faint">#{t.seq} {t.role === "tool_call" ? "调用" : "输出"}</span> {t.tool_name}
+            <pre>{t.text}</pre>
+          </div>
+        ))}
+      </details>
+    </div>
+  );
+}

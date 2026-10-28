@@ -1,95 +1,117 @@
+import { FolderGit2, Search as SearchIcon } from "lucide-react";
 import { useState } from "react";
 import { useApi } from "../api";
+import { SearchTrigger } from "../palette";
 import { href, navigate } from "../router";
 import type { SessionInfo } from "../types";
-import { AgentTag, Empty, ErrorBox, Loading, SessionLink, fmtTime, shortPath } from "../ui";
+import { AgentPill, Empty, ErrorBox, Loading, PageHeader, Panel, cssAgent, fmtTime, shortPath } from "../ui";
 
-const AGENTS = [
+const AGENT_FILTERS = [
   { key: "", label: "全部" },
   { key: "claude-code", label: "Claude Code" },
   { key: "codex", label: "Codex" },
   { key: "pi", label: "pi" },
-  { key: "doubao", label: "豆包工作" },
+  { key: "doubao", label: "豆包" },
   { key: "workbuddy", label: "WorkBuddy" },
 ];
 const SINCE = [
-  { key: "", label: "全部时间" },
-  { key: "1d", label: "24 小时" },
+  { key: "1d", label: "今天" },
   { key: "7d", label: "7 天" },
   { key: "30d", label: "30 天" },
+  { key: "", label: "全部" },
 ];
 
 export function Sessions({ query }: { query: URLSearchParams }) {
   const agent = query.get("agent") ?? "";
-  const since = query.get("since") ?? "";
+  const since = query.get("since") ?? "7d";
   const project = query.get("project") ?? "";
   const [proj, setProj] = useState(project);
-  const qs = new URLSearchParams({ limit: "300" });
+  const qs = new URLSearchParams({ limit: "400" });
   if (agent) qs.set("agent", agent);
   if (since) qs.set("since", since);
   if (project) qs.set("project", project);
-  const { data, error, loading } = useApi<SessionInfo[]>(`sessions?${qs.toString()}`);
+  const { data, error } = useApi<SessionInfo[]>(`sessions?${qs.toString()}`);
   const cur = { agent, since, project };
 
   return (
     <div className="page">
-      <h1>会话</h1>
-      <p className="muted small">自动导入的 Claude Code、Codex、pi、豆包工作、WorkBuddy 会话（只读）。点开查看原文。</p>
+      <PageHeader title="会话" sub="五家 agent 的对话记录，自动导入、只读" actions={<SearchTrigger />} />
       <div className="toolbar">
-        {AGENTS.map((a) => (
-          <a key={a.key} className={`chip ${agent === a.key ? "on" : ""}`} href={href("/sessions", { ...cur, agent: a.key })}>
-            {a.label}
-          </a>
-        ))}
-        <span className="sep" />
-        {SINCE.map((s) => (
-          <a key={s.key} className={`chip ${since === s.key ? "on" : ""}`} href={href("/sessions", { ...cur, since: s.key })}>
-            {s.label}
-          </a>
-        ))}
+        <div className="seg">
+          {AGENT_FILTERS.map((a) => (
+            <a key={a.key} className={agent === a.key ? "on" : ""} href={href("/sessions", { ...cur, agent: a.key })}>
+              {a.label}
+            </a>
+          ))}
+        </div>
+        <div className="seg">
+          {SINCE.map((s) => (
+            <a key={s.key} className={since === s.key ? "on" : ""} href={href("/sessions", { ...cur, since: s.key })}>
+              {s.label}
+            </a>
+          ))}
+        </div>
         <form
+          style={{ display: "flex", gap: 8, alignItems: "center" }}
           onSubmit={(e) => {
             e.preventDefault();
             navigate("/sessions", { ...cur, project: proj.trim() });
           }}
         >
-          <input placeholder="项目目录（如 D:\proj\app）" value={proj} onChange={(e) => setProj(e.target.value)} />
+          <FolderGit2 size={16} color="var(--moss)" />
+          <input className="input" style={{ width: 300 }} placeholder="按项目目录筛选，回车确认" value={proj} onChange={(e) => setProj(e.target.value)} />
+          {project && (
+            <a className="btn quiet" href={href("/sessions", { ...cur, project: "" })}>
+              清除
+            </a>
+          )}
         </form>
       </div>
       {error && <ErrorBox error={error} />}
-      {loading && !data && <Loading />}
-      {data && data.length === 0 && <Empty>没有符合条件的会话</Empty>}
-      {data && data.length > 0 && (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>agent</th>
-              <th>标题</th>
-              <th>目录</th>
-              <th>消息数</th>
-              <th>最近活动</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((s) => (
-              <tr key={s.id} onClick={() => navigate(`/sessions/${encodeURIComponent(s.id)}`)}>
-                <td>
-                  <AgentTag agent={s.agent} />
-                </td>
-                <td className="title-cell">
-                  <SessionLink id={s.id}>{s.title || "（无标题）"}</SessionLink>
-                  <div className="muted small mono">{s.ref}</div>
-                </td>
-                <td className="muted small" title={s.cwd ?? ""}>
-                  {shortPath(s.cwd, 2) || "—"}
-                </td>
-                <td className="num">{s.turn_count}</td>
-                <td className="muted small">{fmtTime(s.updated_at)}</td>
+      <Panel flush>
+        {!data ? (
+          <Loading />
+        ) : data.length === 0 ? (
+          <Empty title="没有符合条件的会话">换个 agent 或时间范围试试；也可以按 Ctrl K 搜索会话原文。</Empty>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th className="spine" />
+                <th>会话</th>
+                <th>agent</th>
+                <th>目录</th>
+                <th style={{ textAlign: "right" }}>消息</th>
+                <th>最近活动</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            </thead>
+            <tbody>
+              {data.map((s) => (
+                <tr key={s.id} onClick={() => navigate(`/sessions/${encodeURIComponent(s.id)}`)}>
+                  <td className="spine" style={cssAgent(s.agent)}>
+                    <i />
+                  </td>
+                  <td className="title">
+                    <b className="ellipsis" style={{ display: "block" }}>{s.title || "（无标题）"}</b>
+                    <span className="mono faint">{s.ref}</span>
+                  </td>
+                  <td>
+                    <AgentPill agent={s.agent} />
+                  </td>
+                  <td className="mono faint" title={s.cwd ?? ""}>
+                    {shortPath(s.cwd, 2) || "—"}
+                  </td>
+                  <td className="num">{s.turn_count}</td>
+                  <td className="faint xs nowrap">{fmtTime(s.updated_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Panel>
+      <p className="faint xs" style={{ marginTop: 10 }}>
+        <SearchIcon size={12} style={{ verticalAlign: -2 }} /> 想找某句话？按 Ctrl K 直接搜索会话原文。
+      </p>
     </div>
   );
 }

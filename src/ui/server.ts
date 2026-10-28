@@ -24,6 +24,7 @@ import {
 } from "../core/index.js";
 import { Ingestor } from "../ingest/index.js";
 import { VERSION } from "../version.js";
+import { projects, weave } from "./views.js";
 
 export interface UiServerOptions {
   port?: number;
@@ -248,6 +249,12 @@ export async function startUiServer(opts: UiServerOptions = {}): Promise<UiServe
         }
         case "presence":
           return listPresence(store.db, { all: str("all") === "1" });
+        case "weave": {
+          const range = activityRange(str("date"), str("since"), str("until"));
+          return weave(store, range.since, range.until);
+        }
+        case "projects":
+          return projects(store, parseTimeBound(str("since") ?? "14d")!, Math.min(num("limit", 8), 30));
       }
     }
 

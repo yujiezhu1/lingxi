@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { token } from "./api";
 import "./styles.css";
+import "./ink.css";
 
 const root = createRoot(document.getElementById("root")!);
 if (!token) {
