@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { navigate } from "../router";
 import type { WeaveData } from "../types";
+import { prefersReducedMotion, useTheme } from "../theme";
 import { KINDS, agentColor, agentName, fmtTime } from "../ui";
 
 const LABEL_W = 116;
 const RIGHT_PAD = 18;
-const TOP = 34;
 const LANE_H = 46;
 const HOUR = 3_600_000;
 const ORDER = ["claude-code", "codex", "pi", "cursor", "doubao", "workbuddy", "user"];
@@ -21,6 +21,9 @@ export function Loom({ data, isToday }: { data: WeaveData; isToday: boolean }) {
   const [width, setWidth] = useState(1000);
   const [tip, setTip] = useState<Tip>(null);
   const [now, setNow] = useState(Date.now());
+  const night = useTheme() === "night";
+  const motion = night && !prefersReducedMotion();
+  const TOP = night ? 54 : 34;
 
   useEffect(() => {
     const el = wrap.current;
@@ -102,6 +105,30 @@ export function Loom({ data, isToday }: { data: WeaveData; isToday: boolean }) {
     <div className="loom" ref={wrap}>
       <svg height={height} viewBox={`0 0 ${width} ${height}`} className="loom-draw" role="img" aria-label="今日各 agent 的工作时间线">
         <defs>
+          <filter id="glow" filterUnits="userSpaceOnUse" x={-20} y={-20} width={width + 40} height={height + 40}>
+            <feGaussianBlur stdDeviation="4" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="glow-strong" filterUnits="userSpaceOnUse" x={-20} y={-20} width={width + 40} height={height + 40}>
+            <feGaussianBlur stdDeviation="2.6" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <linearGradient id="now-grad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2={height}>
+            <stop offset="0" stopColor="#5eead4" stopOpacity="1" />
+            <stop offset="1" stopColor="#5eead4" stopOpacity="0.1" />
+          </linearGradient>
+          <linearGradient id="sweep" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="#5eead4" stopOpacity="0" />
+            <stop offset="0.5" stopColor="#99f6e4" stopOpacity="0.16" />
+            <stop offset="1" stopColor="#a78bfa" stopOpacity="0" />
+          </linearGradient>
           <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
             <path d="M 0 1 L 9 5 L 0 9 z" fill="var(--moss)" />
           </marker>
@@ -109,14 +136,15 @@ export function Loom({ data, isToday }: { data: WeaveData; isToday: boolean }) {
         {hours.map((t) => (
           <g key={t}>
             <line className="hour" x1={x(t)} x2={x(t)} y1={TOP - 8} y2={height - 4} />
-            <text className="hour-label" x={x(t)} y={16} textAnchor="middle">
+            <text className="hour-label" x={x(t)} y={TOP - 18} textAnchor="middle">
               {fmtTime(t, false)}
             </text>
           </g>
         ))}
         {order.map((a) => (
           <g key={a}>
-            <circle cx={12} cy={laneY(a)} r={5} fill={agentColor(a)} />
+            <rect className="lane-band" x={LABEL_W - 6} y={laneY(a) - 13} width={plotW + 12} height={26} rx={13} fill={agentColor(a)} fillOpacity={0.07} />
+            <circle cx={12} cy={laneY(a)} r={5} fill={agentColor(a)} filter={night ? "url(#glow-strong)" : undefined} />
             <text className="lane-label" x={24} y={laneY(a) + 4.5}>
               {agentName(a)}
             </text>
@@ -125,7 +153,7 @@ export function Loom({ data, isToday }: { data: WeaveData; isToday: boolean }) {
         ))}
         {data.lanes.map((l) => {
           const n = rowCount.get(l.agent) ?? 1;
-          const sw = n > 1 ? 6 : 8;
+          const sw = night ? (n > 1 ? 7 : 10) : n > 1 ? 6 : 8;
           const li = laneIndex++;
           return l.sessions.map((s) => {
             const r = rows.get(s.id) ?? 0;
@@ -135,9 +163,10 @@ export function Loom({ data, isToday }: { data: WeaveData; isToday: boolean }) {
               const x2 = Math.max(x(b), x1 + 9);
               const len = Math.ceil(x2 - x1) + 2;
               return (
+                <g key={`${s.id}-${i}`}>
                 <line
-                  key={`${s.id}-${i}`}
                   className="thread"
+                  filter={night ? "url(#glow)" : undefined}
                   x1={x1}
                   x2={x2}
                   y1={y}
@@ -160,6 +189,9 @@ export function Loom({ data, isToday }: { data: WeaveData; isToday: boolean }) {
                   onMouseLeave={hide}
                   onClick={() => navigate(`/sessions/${encodeURIComponent(s.id)}`)}
                 />
+                {x2 - x1 > 14 && <circle className="cap" cx={x1 + sw / 2} cy={y} r={sw / 3.2} pointerEvents="none" />}
+                {x2 - x1 > 14 && <circle className="cap" cx={x2 - sw / 2} cy={y} r={sw / 3.2} pointerEvents="none" />}
+                </g>
               );
             });
           });
@@ -172,9 +204,15 @@ export function Loom({ data, isToday }: { data: WeaveData; isToday: boolean }) {
           const xb = xa + 22;
           const d = `M ${xa} ${ya} C ${xa + 18} ${ya}, ${xb - 14} ${yb}, ${xb} ${yb + (yb > ya ? -6 : 6)}`;
           return (
+            <g key={k.id}>
+            {motion && (
+              <circle className="particle" r={2.3}>
+                <animateMotion dur="2.4s" repeatCount="indefinite" path={d} />
+              </circle>
+            )}
             <path
-              key={k.id}
               className="link"
+              filter={night ? "url(#glow-strong)" : undefined}
               d={d}
               markerEnd="url(#arrow)"
               onMouseMove={(e) =>
@@ -194,6 +232,7 @@ export function Loom({ data, isToday }: { data: WeaveData; isToday: boolean }) {
               onClick={() => navigate("/messages")}
               style={{ cursor: "pointer", pointerEvents: "stroke" }}
             />
+            </g>
           );
         })}
         {data.knots.map((k) => (
@@ -217,13 +256,28 @@ export function Loom({ data, isToday }: { data: WeaveData; isToday: boolean }) {
             onClick={() => k.topic_id && navigate(`/topics/${encodeURIComponent(k.topic_id)}`)}
           />
         ))}
+        {motion && (
+          <rect x={LABEL_W} y={TOP - 8} width={140} height={height - TOP + 4} fill="url(#sweep)" pointerEvents="none">
+            <animate attributeName="x" from={LABEL_W - 140} to={width} dur="7s" repeatCount="indefinite" />
+          </rect>
+        )}
         {isToday && now >= t0 && now <= t1 && (
-          <g>
-            <line className="now" x1={x(now)} x2={x(now)} y1={TOP - 6} y2={height - 16} />
-            <text className="now-label" x={x(now)} y={height - 3} textAnchor="middle">
-              现在 {fmtTime(now, false)}
-            </text>
-          </g>
+          night ? (
+            <g>
+              <line className="now" x1={x(now)} x2={x(now)} y1={22} y2={height - 6} />
+              <rect x={x(now) - 40} y={4} width={80} height={20} rx={10} fill="rgba(94,234,212,0.14)" stroke="#5eead4" strokeOpacity={0.7} />
+              <text className="now-label" x={x(now)} y={18} textAnchor="middle">
+                {fmtTime(now, false)} 进行中
+              </text>
+            </g>
+          ) : (
+            <g>
+              <line className="now" x1={x(now)} x2={x(now)} y1={TOP - 6} y2={height - 16} />
+              <text className="now-label" x={x(now)} y={height - 3} textAnchor="middle">
+                现在 {fmtTime(now, false)}
+              </text>
+            </g>
+          )
         )}
       </svg>
       {tip && (

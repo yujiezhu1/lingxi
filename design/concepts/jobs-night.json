@@ -1,0 +1,8 @@
+[
+  {
+    "id": "03_night_today",
+    "size": "1536x1024",
+    "quality": "high",
+    "prompt": "High-fidelity desktop web app UI screenshot, 1536x1024, dark 'night sky / aurora' theme for an app named 灵犀 (Lingxi) that connects several AI agents. Mood: futuristic, luminous, cinematic but still a clean usable dashboard. Background: deep indigo night gradient (#070B18 to #121A36) with a very subtle aurora glow (teal #2DD4BF and violet #8B5CF6) drifting in the top right corner and a faint star field. Panels are frosted glass: semi-transparent dark navy (rgba 18,26,52,0.6) with 1px luminous borders (rgba 150,180,255,0.14), 14px radius, soft inner glow. Text light #E7ECFF, muted #8D98BA.\n\nLeft rail: glass, brand 灵犀 in an elegant Chinese serif with a soft teal glow, six nav items with thin line icons (今日 selected with a glowing teal pill), small status at bottom.\n\nHero (full width glass card) titled 今日织机: a timeline from 08:00 to 21:00 with five lanes (Claude Code orange #FF8A65, Codex green #34D399, pi violet #A78BFA, 豆包 amber #FBBF24, WorkBuddy blue #60A5FA). Each lane has glowing neon threads (thick rounded lines with bloom glow) for active periods; bright golden glowing knots on threads; luminous curved dashed arcs between lanes with small bright light particles traveling along them; a vertical glowing 'now' line with a soft scanning gradient. It should look like light threads woven across a dark loom.\n\nBelow: two columns of glass cards: 'needs attention' list with glowing status dots, 'online' list with pulsing agent orbs, 'projects' table with branch chips, and recent topics. No emoji, no stock photos, crisp readable UI text, realistic browser rendering, premium sci-fi product feel."
+  }
+]

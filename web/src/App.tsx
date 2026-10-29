@@ -1,4 +1,5 @@
-import { FileText, Home, MessageSquareText, MessagesSquare, Settings2, Spline } from "lucide-react";
+import { FileText, Home, MessageSquareText, MessagesSquare, Moon, Settings2, Spline, Sun } from "lucide-react";
+import { setTheme, useTheme } from "./theme";
 import { useApi, useLive } from "./api";
 import { CommandPalette } from "./palette";
 import { useRoute } from "./router";
@@ -26,6 +27,7 @@ export function App() {
   const msg = useApi<{ unread: number }>("messages?limit=1");
   const status = useApi<{ version: string }>("status", { live: false });
   const top = route.path[0] ?? "";
+  const theme = useTheme();
 
   let page;
   switch (route.path[0]) {
@@ -75,6 +77,10 @@ export function App() {
           <span className={`live ${connected ? "on" : ""}`} />
           {connected ? "实时同步中" : "未连接"}
           <span className="faint">· v{status.data?.version ?? ""}</span>
+          <button className="theme-toggle" onClick={() => setTheme(theme === "night" ? "celadon" : "night")} title="切换主题">
+            {theme === "night" ? <Sun size={12} /> : <Moon size={12} />}
+            {theme === "night" ? "青瓷" : "夜幕"}
+          </button>
         </div>
       </aside>
       <main className="main">{page}</main>

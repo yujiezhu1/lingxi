@@ -75,7 +75,7 @@ Lingxi is a **local context hub shared by all your agents**. Handoffs, knowledge
 - 🔒 **Local only** — data lives in `~/.lingxi/`; no network access, no external model calls. Thinking traces are not imported; common secret formats are masked.
 - 🧩 **Vendor-neutral** — built on MCP and Agent Skills; supports Claude Code, Codex, pi, Cursor, WorkBuddy and Doubao Work, and new agents only need an adapter.
 
-**Current version: v0.6.0** (see the [roadmap](#roadmap)).
+**Current version: v0.7.0** (see the [roadmap](#roadmap)).
 
 ---
 
@@ -180,6 +180,7 @@ Detailed docs are currently in Chinese:
 | P1-c Cross-session messaging | Presence, inbox, real-time delivery via a pi extension, Claude Code / Codex hooks, unread notices | ✅ v0.4.0 |
 | P3-a Web UI | `lingxi ui`: today, topics, sessions, unified search, messages, reports, status (read-mostly) | ✅ v0.5.0 |
 | P3-b UI redesign | Celadon-and-ink design system, the loom timeline, three-column topic reader, Ctrl K palette | ✅ v0.6.0 |
+| P3-c Night theme | Luminous dark theme (default): aurora sky, frosted glass, neon loom with flowing messages; switch back to celadon anytime | ✅ v0.7.0 |
 | P2 | Cursor transcripts, presence detection, better CJK search | Planned |
 | P3 | Background service (HTTP MCP, message delivery), local web UI | Planned |
 | P4 | Remote agents, multi-device sync, team sharing | Planned |

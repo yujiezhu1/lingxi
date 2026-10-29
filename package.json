@@ -1,6 +1,6 @@
 {
   "name": "lingxi-hub",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "灵犀 Lingxi — local-first context hub that lets different AI agents and sessions share handoffs, topics and knowledge.",
   "type": "module",
   "license": "UNLICENSED",

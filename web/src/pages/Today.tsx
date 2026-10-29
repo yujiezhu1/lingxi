@@ -131,7 +131,7 @@ export function Today() {
             ) : (
               <ul className="rows">
                 {online.map((p) => (
-                  <li key={p.key}>
+                  <li key={p.key} className="orb-live">
                     <div className="row">
                       <AgentAvatar agent={p.agent} />
                       <span className="grow">
